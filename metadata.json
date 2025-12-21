@@ -1,0 +1,5 @@
+{
+  "name": "UniConnect ESP",
+  "description": "Plateforme de gestion pour l'École Supérieure Polytechnique de Dakar, connectant administration, délégués et étudiants.",
+  "requestFramePermissions": []
+}
