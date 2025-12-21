@@ -67,10 +67,13 @@ export default function Polls() {
   const displayedPolls = useMemo(() => {
     const now = new Date();
     return polls.filter(poll => {
-      const target = poll.className || 'Général';
+      const target = (poll.className || 'Général').toLowerCase().trim();
+      const userClass = (user?.className || '').toLowerCase().trim();
+      
+      // Visibilité logicielle plus souple
       const isVisible = user?.role === UserRole.ADMIN 
         ? true 
-        : (target === user?.className || target === 'Général');
+        : (target === userClass || target === 'général' || poll.className === 'Général');
       
       if (!isVisible) return false;
 
@@ -78,13 +81,13 @@ export default function Polls() {
       const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
       
       const isActuallyActive = poll.isActive && 
-        (!pollStart || now >= pollStart) && 
-        (!pollEnd || now <= pollEnd);
+        (!pollStart || isNaN(pollStart.getTime()) || now >= pollStart) && 
+        (!pollEnd || isNaN(pollEnd.getTime()) || now <= pollEnd);
       
-      const isScheduled = poll.isActive && pollStart && now < pollStart;
-      const isClosed = !poll.isActive || (pollEnd && now > pollEnd);
+      const isScheduled = poll.isActive && pollStart && !isNaN(pollStart.getTime()) && now < pollStart;
+      const isClosed = !poll.isActive || (pollEnd && !isNaN(pollEnd.getTime()) && now > pollEnd);
 
-      const matchesClassFilter = classFilter === 'all' || target === classFilter;
+      const matchesClassFilter = classFilter === 'all' || poll.className === classFilter;
       const matchesSearch = poll.question.toLowerCase().includes(searchTerm.toLowerCase());
       
       let matchesStatus = true;
@@ -94,10 +97,9 @@ export default function Polls() {
 
       return matchesClassFilter && matchesSearch && matchesStatus;
     }).sort((a, b) => {
-        // Tri par date de début descendante, gère les valeurs nulles
-        const aTime = a.startTime ? new Date(a.startTime).getTime() : 0;
-        const bTime = b.startTime ? new Date(b.startTime).getTime() : 0;
-        if (isNaN(aTime) || isNaN(bTime)) return 0;
+        // Fallback sur createdAt si startTime est manquant
+        const aTime = a.startTime ? new Date(a.startTime).getTime() : new Date((a as any).createdAt || 0).getTime();
+        const bTime = b.startTime ? new Date(b.startTime).getTime() : new Date((b as any).createdAt || 0).getTime();
         return bTime - aTime;
     });
   }, [user, polls, searchTerm, statusFilter, classFilter]);
@@ -110,17 +112,11 @@ export default function Polls() {
     const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
     
     const isActuallyActive = poll.isActive && 
-      (!pollStart || now >= pollStart) && 
-      (!pollEnd || now <= pollEnd);
+      (!pollStart || isNaN(pollStart.getTime()) || now >= pollStart) && 
+      (!pollEnd || isNaN(pollEnd.getTime()) || now <= pollEnd);
 
     if (!isActuallyActive) {
         addNotification({ title: 'Vote impossible', message: 'Ce sondage est programmé ou expiré.', type: 'warning' });
-        return;
-    }
-
-    const isConcerned = poll.className === 'Général' || poll.className === user.className;
-    if (!isConcerned && user.role !== UserRole.ADMIN) {
-        addNotification({ title: 'Accès restreint', message: 'Vous ne pouvez voter que pour votre classe.', type: 'warning' });
         return;
     }
 
@@ -261,14 +257,13 @@ export default function Polls() {
         {displayedPolls.length > 0 ? displayedPolls.map(poll => {
             const totalVotes = poll.totalVotes || 0;
             const hasVoted = poll.hasVoted;
-            const isConcerned = poll.className === 'Général' || poll.className === user?.className;
             
             const now = new Date();
             const pollStart = poll.startTime ? new Date(poll.startTime) : null;
             const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
-            const isActuallyActive = poll.isActive && (!pollStart || now >= pollStart) && (!pollEnd || now <= pollEnd);
-            const isScheduled = poll.isActive && pollStart && now < pollStart;
-            const isExpired = pollEnd && now > pollEnd;
+            const isActuallyActive = poll.isActive && (!pollStart || isNaN(pollStart.getTime()) || now >= pollStart) && (!pollEnd || isNaN(pollEnd.getTime()) || now <= pollEnd);
+            const isScheduled = poll.isActive && pollStart && !isNaN(pollStart.getTime()) && now < pollStart;
+            const isExpired = pollEnd && !isNaN(pollEnd.getTime()) && now > pollEnd;
 
             return (
               <div key={poll.id} className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border border-gray-100 dark:border-gray-800 transition-all flex flex-col relative overflow-hidden group hover:border-primary-400">
@@ -303,7 +298,7 @@ export default function Polls() {
                   {poll.options.map(option => {
                     const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
                     const isSelected = poll.userVoteOptionId === option.id;
-                    const canVote = isActuallyActive && !hasVoted && isConcerned;
+                    const canVote = isActuallyActive && !hasVoted;
                     
                     return (
                       <button 
@@ -328,8 +323,8 @@ export default function Polls() {
                 </div>
 
                 <div className="mt-8 mb-10 text-[9px] font-bold text-gray-400 italic flex flex-col gap-1">
-                   {pollStart && <span>Début : {new Date(pollStart).toLocaleString()}</span>}
-                   {pollEnd && <span className={isExpired ? "text-red-500" : ""}>Fin : {new Date(pollEnd).toLocaleString()} {isExpired && "(Expiré)"}</span>}
+                   {pollStart && !isNaN(new Date(pollStart).getTime()) && <span>Début : {new Date(pollStart).toLocaleString()}</span>}
+                   {pollEnd && !isNaN(new Date(pollEnd).getTime()) && <span className={isExpired ? "text-red-500" : ""}>Fin : {new Date(pollEnd).toLocaleString()} {isExpired && "(Expiré)"}</span>}
                 </div>
 
                 <div className="pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between relative z-10">

@@ -178,6 +178,8 @@ export const API = {
   polls: {
     list: async (): Promise<Poll[]> => {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // On récupère explicitement created_at pour le tri
       const { data: polls, error } = await supabase.from('polls')
         .select('*, poll_options(id, label, votes)')
         .order('created_at', { ascending: false });
@@ -205,6 +207,7 @@ export const API = {
           isActive: p.is_active,
           startTime: p.start_time, 
           endTime: p.end_time,
+          createdAt: p.created_at, // Ajout de created_at
           options, 
           totalVotes: options.reduce((acc: number, o: any) => acc + o.votes, 0),
           hasVoted: !!userVote, 
