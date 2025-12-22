@@ -29,7 +29,8 @@ const mapProfile = (dbProfile: any): User => ({
   className: dbProfile.classname,
   avatar: dbProfile.avatar,
   schoolName: dbProfile.school_name,
-  isActive: dbProfile.is_active
+  isActive: dbProfile.is_active,
+  themeColor: dbProfile.theme_color
 });
 
 export const API = {
@@ -60,6 +61,7 @@ export const API = {
       if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
       if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+      if (updates.themeColor !== undefined) dbUpdates.theme_color = updates.themeColor;
       
       const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', id).select().maybeSingle();
       if (error || !data) handleAPIError(error, "Mise à jour du profil échouée");

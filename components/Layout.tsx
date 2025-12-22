@@ -10,13 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 
-const COLORS = [
-  'bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 
-  'bg-amber-600', 'bg-rose-600', 'bg-indigo-600',
-  'bg-cyan-600', 'bg-orange-600'
-];
-
-export const UserAvatar = ({ name, className = "w-10 h-10", textClassName = "text-xs" }: { name: string, className?: string, textClassName?: string }) => {
+export const UserAvatar = ({ name, color, className = "w-10 h-10", textClassName = "text-xs" }: { name: string, color?: string, className?: string, textClassName?: string }) => {
   const initials = useMemo(() => {
     if (!name) return "?";
     const parts = name.split(' ');
@@ -24,14 +18,13 @@ export const UserAvatar = ({ name, className = "w-10 h-10", textClassName = "tex
     return name.slice(0, 2).toUpperCase();
   }, [name]);
 
-  const color = useMemo(() => {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return COLORS[Math.abs(hash) % COLORS.length];
-  }, [name]);
+  const bgColor = color || '#0ea5e9';
 
   return (
-    <div className={`${className} ${color} rounded-2xl flex items-center justify-center text-white font-black shadow-lg border-2 border-white dark:border-gray-800 shrink-0 transform hover:rotate-3 transition-transform`}>
+    <div 
+      className={`${className} rounded-2xl flex items-center justify-center text-white font-black shadow-lg border-2 border-white dark:border-gray-800 shrink-0 transform hover:rotate-3 transition-transform`}
+      style={{ backgroundColor: bgColor }}
+    >
       <span className={textClassName}>{initials}</span>
     </div>
   );
@@ -47,6 +40,8 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const themeColor = user?.themeColor || '#0ea5e9';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -89,7 +84,7 @@ export default function Layout() {
       case 'alert': return <AlertTriangle size={16} className="text-red-500" />;
       case 'success': return <CheckCircle2 size={16} className="text-emerald-500" />;
       case 'warning': return <AlertTriangle size={16} className="text-orange-500" />;
-      default: return <Info size={16} className="text-blue-500" />;
+      default: return <Info size={16} style={{ color: themeColor }} />;
     }
   };
 
@@ -101,21 +96,25 @@ export default function Layout() {
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl md:shadow-none flex flex-col`}>
         <div className="p-8 h-24 flex-shrink-0 flex items-center gap-4">
-          <div className="w-12 h-12 flex items-center justify-center text-white bg-gradient-to-br from-primary-500 to-indigo-600 rounded-2xl shadow-lg shadow-primary-500/20">
+          {/* Fix: removed invalid 'shadowColor' property and replaced with 'boxShadow' */}
+          <div 
+            className="w-12 h-12 flex items-center justify-center text-white rounded-2xl shadow-lg"
+            style={{ backgroundColor: themeColor, boxShadow: `0 10px 15px -3px ${themeColor}33` }}
+          >
              <School size={28} />
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tighter uppercase italic leading-none">UniConnect</h1>
-            <p className="text-[9px] font-black text-primary-500 uppercase tracking-widest mt-1 truncate">{user?.schoolName || 'ESP DAKAR'}</p>
+            <p className="text-[9px] font-black uppercase tracking-widest mt-1 truncate" style={{ color: themeColor }}>{user?.schoolName || 'ESP DAKAR'}</p>
           </div>
         </div>
 
         <div className="px-6 py-2 flex-1 overflow-y-auto custom-scrollbar">
           <NavLink 
             to="/profile" 
-            className={({ isActive }) => `flex items-center gap-4 mb-10 p-5 rounded-[2rem] transition-all group border-2 ${isActive ? 'bg-primary-50/50 border-primary-200 dark:bg-primary-900/10 dark:border-primary-800/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-transparent shadow-sm bg-white dark:bg-gray-800/20'}`}
+            className={({ isActive }) => `flex items-center gap-4 mb-10 p-5 rounded-[2rem] transition-all group border-2 ${isActive ? 'bg-gray-50/50 border-gray-200 dark:bg-gray-800/10 dark:border-gray-800/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-transparent shadow-sm bg-white dark:bg-gray-800/20'}`}
           >
-             <UserAvatar name={user?.name || "U"} className="w-12 h-12" textClassName="text-xl" />
+             <UserAvatar name={user?.name || "U"} color={themeColor} className="w-12 h-12" textClassName="text-xl" />
              <div className="flex-1 min-w-0">
                <p className="text-sm font-black truncate text-gray-900 dark:text-white leading-tight">{user?.name.split(' ')[0]}</p>
                <div className="mt-1 inline-flex px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-md">
@@ -132,15 +131,19 @@ export default function Layout() {
                 end={item.end}
                 className={({ isActive }) => `flex items-center gap-4 px-5 py-4 text-sm font-bold rounded-2xl transition-all duration-300 group
                   ${isActive 
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-xl shadow-primary-500/30 -translate-x-1' 
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-primary-50 dark:hover:bg-primary-900/10 hover:text-primary-600 dark:hover:text-primary-400'
+                    ? 'text-white shadow-xl -translate-x-1' 
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/20'
                   }`}
+                style={({ isActive }) => isActive ? { backgroundColor: themeColor, boxShadow: `0 10px 25px -5px ${themeColor}66` } : {}}
               >
-                {/* Fixed: Use render prop to access isActive in the icon's className */}
                 {({ isActive }) => (
                   <>
-                    <item.icon size={20} className={`transition-transform duration-500 ${isActive ? 'scale-110 rotate-3' : 'group-hover:scale-110 group-hover:-rotate-3'}`} />
-                    <span className="tracking-tight">{item.label}</span>
+                    <item.icon 
+                      size={20} 
+                      className={`transition-transform duration-500 ${isActive ? 'scale-110 rotate-3' : 'group-hover:scale-110 group-hover:-rotate-3'}`} 
+                      style={!isActive ? { color: 'inherit' } : {}}
+                    />
+                    <span className="tracking-tight" style={!isActive ? { color: 'inherit' } : {}}>{item.label}</span>
                   </>
                 )}
               </NavLink>
@@ -164,16 +167,16 @@ export default function Layout() {
             </button>
             <div className="hidden lg:flex flex-col">
                <h2 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter leading-none">{user?.schoolName || 'ESP DAKAR'}</h2>
-               <p className="text-[10px] font-black text-primary-500 uppercase tracking-[0.2em] mt-1">{user?.className || 'PORTAIL CENTRALISÉ'}</p>
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] mt-1" style={{ color: themeColor }}>{user?.className || 'PORTAIL CENTRALISÉ'}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4 relative" ref={notifRef}>
              <button 
                 onClick={() => setNotifOpen(!isNotifOpen)} 
-                className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl relative transition-all active:scale-90 ${isNotifOpen ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-500 ring-2 ring-primary-100' : ''}`}
+                className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl relative transition-all active:scale-95 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800 text-gray-900' : ''}`}
               >
-               <Bell size={24} />
+               <Bell size={24} style={isNotifOpen ? { color: themeColor } : {}} />
                {unreadCount > 0 && (
                  <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-4 ring-white dark:ring-gray-900 animate-pulse"></span>
                )}
@@ -181,10 +184,10 @@ export default function Layout() {
 
              {isNotifOpen && (
                <div className="absolute top-full right-0 mt-4 w-80 sm:w-96 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-50 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30">
+                 <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/30">
                     <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] italic">Notifications</h3>
                     <div className="flex gap-2">
-                      <button onClick={markAllAsRead} className="p-2 text-gray-400 hover:text-primary-500 transition-colors"><Check size={18} /></button>
+                      <button onClick={markAllAsRead} className="p-2 text-gray-400 hover:text-gray-600 transition-colors"><Check size={18} /></button>
                       <button onClick={clearNotifications} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                     </div>
                  </div>
@@ -194,9 +197,9 @@ export default function Layout() {
                         <div 
                           key={notif.id} 
                           onClick={() => { markAsRead(notif.id); if (notif.link) navigate(notif.link); }}
-                          className={`p-5 flex gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer relative ${!notif.isRead ? 'bg-primary-50/10' : ''}`}
+                          className={`p-5 flex gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer relative ${!notif.isRead ? 'bg-gray-50/50' : ''}`}
                         >
-                          <div className={`p-3 rounded-2xl shrink-0 h-fit ${notif.type === 'alert' ? 'bg-red-50 text-red-500' : 'bg-primary-50 text-primary-500'}`}>
+                          <div className="p-3 rounded-2xl shrink-0 h-fit bg-gray-100 dark:bg-gray-800">
                             {getNotifIcon(notif.type)}
                           </div>
                           <div className="flex-1 min-w-0">

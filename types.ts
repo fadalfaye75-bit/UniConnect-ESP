@@ -14,6 +14,7 @@ export interface User {
   avatar?: string;
   schoolName?: string;
   isActive?: boolean;
+  themeColor?: string; // Hex color code
 }
 
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent';

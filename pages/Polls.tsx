@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw } from 'lucide-react';
+// Added Radio to the imports from lucide-react
+import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Poll, ClassGroup } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 export default function Polls() {
   const { user, adminViewClass } = useAuth();
@@ -16,8 +17,7 @@ export default function Polls() {
   const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
-  const [selectedPollForResults, setSelectedPollForResults] = useState<Poll | null>(null);
+  const [expandedPollId, setExpandedPollId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   
   const [votingIds, setVotingIds] = useState<Set<string>>(new Set());
@@ -84,12 +84,11 @@ export default function Polls() {
     if (!user || votingIds.has(poll.id)) return;
     
     const isChangingVote = poll.hasVoted && poll.userVoteOptionId !== optionId;
-    
     if (poll.userVoteOptionId === optionId) return;
 
     setVotingIds(prev => new Set(prev).add(poll.id));
     
-    // Optimistic UI : On simule le changement localement pour l'élégance
+    // Optimistic UI update
     const oldOptionId = poll.userVoteOptionId;
     setPolls(prev => prev.map(p => {
         if (p.id !== poll.id) return p;
@@ -115,7 +114,7 @@ export default function Polls() {
       });
     } catch (error: any) {
       addNotification({ title: 'Erreur', message: 'Échec de la mise à jour.', type: 'alert' });
-      fetchPolls(false); // Rollback en cas d'erreur
+      fetchPolls(false); 
     } finally {
       setVotingIds(prev => {
         const next = new Set(prev);
@@ -123,6 +122,10 @@ export default function Polls() {
         return next;
       });
     }
+  };
+
+  const toggleExpand = (pollId: string) => {
+    setExpandedPollId(expandedPollId === pollId ? null : pollId);
   };
 
   const handleCreatePoll = async (e: React.FormEvent) => {
@@ -146,19 +149,24 @@ export default function Polls() {
     }
   };
 
-  const COLOR_PALETTE = [{ start: '#0ea5e9', end: '#38bdf8' }, { start: '#10b981', end: '#34d399' }, { start: '#f59e0b', end: '#fbbf24' }];
+  if (loading) return (
+    <div className="flex flex-col justify-center items-center h-full gap-4">
+        <Loader2 className="animate-spin text-primary-500" size={40} />
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse italic">Synchronisation des scrutins...</p>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-8 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 z-20 backdrop-blur-md">
         <div className="flex items-center gap-5">
-           <div className="w-14 h-14 bg-primary-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/20">
+           <div className="w-14 h-14 bg-gradient-to-br from-violet-600 to-primary-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/20">
               <BarChart2 size={32} />
            </div>
            <div>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter italic leading-none">Consultations</h2>
+              <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter italic leading-none uppercase">Consultations</h2>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                 <Users size={12}/> Prenez part aux décisions de l'ESP
+                 <Users size={12}/> {user?.className} • DÉCISIONNEL
               </p>
            </div>
         </div>
@@ -166,100 +174,187 @@ export default function Polls() {
         <div className="flex flex-col lg:flex-row flex-1 items-center gap-3 max-w-3xl">
            <div className="relative flex-1 w-full group">
              <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={18} />
-             <input type="text" placeholder="Rechercher une question..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-50 transition-all font-medium" />
+             <input type="text" placeholder="Rechercher un scrutin..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-50 transition-all font-bold italic" />
            </div>
            {canManage && (
-             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3.5 rounded-2xl text-xs font-black shadow-xl shadow-primary-500/20 transition-all active:scale-95 uppercase tracking-widest">
-               <Plus size={18} /> Créer un sondage
+             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-primary-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black shadow-xl shadow-primary-500/20 active:scale-95 transition-all uppercase tracking-widest italic">
+               <Plus size={18} /> Nouveau Scrutin
              </button>
            )}
         </div>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-8">
         {displayedPolls.map(poll => {
             const now = new Date();
             const pollStart = poll.startTime ? new Date(poll.startTime) : null;
             const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
             const isActuallyActive = poll.isActive && (!pollStart || now >= pollStart) && (!pollEnd || now <= pollEnd);
+            const isExpanded = expandedPollId === poll.id;
+            const maxVotes = Math.max(...poll.options.map(o => o.votes), 1);
 
             return (
-              <div key={poll.id} className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border border-gray-100 dark:border-gray-800 transition-all flex flex-col relative overflow-hidden group hover:border-primary-400 hover:shadow-2xl">
-                <div className="flex justify-between items-center mb-8 relative z-10">
-                   <div className="flex items-center gap-2">
-                      <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${isActuallyActive ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
-                        {isActuallyActive ? <><Timer size={12} className="animate-pulse" /> Ouvert</> : <><Lock size={12} /> Clos</>}
+              <div 
+                key={poll.id} 
+                onClick={() => !isExpanded && toggleExpand(poll.id)}
+                className={`bg-white dark:bg-gray-900 rounded-[3rem] p-8 md:p-12 shadow-soft border-2 transition-all duration-500 flex flex-col relative overflow-hidden group cursor-pointer ${
+                  isExpanded ? 'border-primary-500 shadow-2xl scale-[1.01]' : 'border-transparent hover:border-gray-100 hover:shadow-xl'
+                }`}
+              >
+                {/* Visual Accent */}
+                <div className={`absolute top-0 left-0 w-2 h-full ${isActuallyActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+
+                <div className="flex justify-between items-start mb-8">
+                   <div className="flex flex-wrap gap-3">
+                      <div className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${isActuallyActive ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                        {isActuallyActive ? <><Radio className="animate-pulse" size={14} /> Scrutin en cours</> : <><Lock size={14} /> Consultation fermée</>}
                       </div>
-                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] border border-gray-100 dark:border-gray-800 px-3 py-1.5 rounded-full">{poll.className || 'Général'}</span>
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-gray-800 px-5 py-2 rounded-full border border-gray-100 dark:border-gray-800">
+                        {poll.className || 'ESP DAKAR'}
+                      </span>
                    </div>
-                   {poll.hasVoted && isActuallyActive && (
-                     <div className="group/change relative">
-                        <span className="text-[9px] font-black text-primary-500 uppercase tracking-widest flex items-center gap-2 bg-primary-50 dark:bg-primary-900/20 px-3 py-1.5 rounded-xl border border-primary-100">
-                            <RefreshCcw size={14} className="group-hover/change:rotate-180 transition-transform duration-500" /> Vote modifiable
-                        </span>
-                     </div>
-                   )}
+                   <button 
+                    onClick={(e) => { e.stopPropagation(); toggleExpand(poll.id); }}
+                    className={`p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-primary-500 transition-all ${isExpanded ? 'rotate-180 bg-primary-50 text-primary-500' : ''}`}
+                   >
+                     <ChevronDown size={24} />
+                   </button>
                 </div>
 
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-8 leading-tight tracking-tighter italic">{poll.question}</h3>
+                <div className="flex-1">
+                  <h3 className={`text-3xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tighter italic mb-10 transition-colors ${isExpanded ? 'text-primary-600' : ''}`}>
+                    {poll.question}
+                  </h3>
 
-                <div className="space-y-4 flex-1 relative z-10">
-                  {poll.options.map(option => {
-                    const percentage = poll.totalVotes > 0 ? Math.round((option.votes / poll.totalVotes) * 100) : 0;
-                    const isSelected = poll.userVoteOptionId === option.id;
-                    const canVote = isActuallyActive && !votingIds.has(poll.id);
-                    
-                    return (
-                      <button 
-                        key={option.id} 
-                        onClick={() => canVote && handleVote(poll, option.id)} 
-                        disabled={!canVote} 
-                        className={`relative w-full text-left rounded-[2rem] overflow-hidden transition-all h-20 border-2 flex items-center px-8 ${
-                            isSelected 
-                            ? 'border-primary-500 bg-primary-50/10' 
-                            : 'border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900'
-                        } ${!canVote ? 'cursor-default' : 'hover:border-primary-300 hover:scale-[1.01] active:scale-95 shadow-sm'}`}
-                      >
-                         <div 
-                            className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-out ${
-                                isSelected ? 'bg-primary-500/20 shadow-[inset_-5px_0_15px_rgba(14,165,233,0.1)]' : 'bg-gray-50 dark:bg-gray-800/40'
-                            }`} 
-                            style={{ width: `${percentage}%` }} 
-                         />
-                         
-                         <div className="flex-1 flex items-center justify-between z-10 relative">
-                              <div className="flex flex-col">
-                                <span className={`text-sm font-black italic flex items-center gap-3 ${isSelected ? 'text-primary-600' : 'text-gray-700 dark:text-gray-300'}`}>
-                                    {option.label}
-                                    {isSelected && <CheckCircle2 size={20} className="text-primary-500 animate-in zoom-in duration-500" />}
-                                </span>
-                                {isSelected && <span className="text-[8px] font-black uppercase text-primary-400 mt-1 tracking-widest">Votre sélection</span>}
-                              </div>
-                              <div className="flex flex-col items-end">
-                                <span className={`font-black text-xl ${isSelected ? 'text-primary-600' : 'text-gray-400'}`}>{percentage}%</span>
-                                <span className="text-[8px] font-bold text-gray-300 uppercase">{option.votes} voix</span>
-                              </div>
-                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                  <div className="space-y-4">
+                    {poll.options.map(option => {
+                      const percentage = poll.totalVotes > 0 ? Math.round((option.votes / poll.totalVotes) * 100) : 0;
+                      const isSelected = poll.userVoteOptionId === option.id;
+                      const isLeader = option.votes === maxVotes && poll.totalVotes > 0;
+                      const canVote = isActuallyActive && !votingIds.has(poll.id);
+                      
+                      return (
+                        <div key={option.id} className="relative">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); if(canVote) handleVote(poll, option.id); }} 
+                            disabled={!canVote} 
+                            className={`relative w-full text-left rounded-[2rem] overflow-hidden transition-all h-24 flex items-center px-10 border-2 ${
+                                isSelected 
+                                ? 'border-primary-500 bg-primary-50/20 shadow-lg' 
+                                : 'border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-900'
+                            } ${!canVote ? 'cursor-default' : 'hover:border-primary-300 hover:translate-x-1 active:scale-95'}`}
+                          >
+                             {/* Progress Bar with Gradient */}
+                             <div 
+                                className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-out opacity-20 ${
+                                    isSelected ? 'bg-gradient-to-r from-primary-600 to-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                                }`} 
+                                style={{ width: `${percentage}%` }} 
+                             />
+                             
+                             <div className="flex-1 flex items-center justify-between z-10 relative">
+                                  <div className="flex items-center gap-6 min-w-0">
+                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-primary-500 border-primary-500 text-white scale-125' : 'border-gray-200'}`}>
+                                       {isSelected ? <Check size={16} strokeWidth={4} /> : null}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className={`text-lg font-black italic truncate ${isSelected ? 'text-primary-600' : 'text-gray-800 dark:text-gray-200'}`}>
+                                        {option.label}
+                                      </p>
+                                      {isLeader && isExpanded && (
+                                        <span className="text-[9px] font-black text-amber-500 uppercase flex items-center gap-1 mt-1">
+                                          <Trophy size={10} /> En tête du vote
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                <div className="mt-10 pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="flex -space-x-3">
-                            {[1,2,3].map(i => (
-                                <div key={i} className={`w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center text-[10px] font-black text-white bg-primary-${300 + (i*100)}`}>
-                                    {String.fromCharCode(64 + i)}
-                                </div>
-                            ))}
+                                  <div className="flex flex-col items-end shrink-0 ml-4">
+                                    <span className={`text-3xl font-black italic tracking-tighter ${isSelected ? 'text-primary-600' : 'text-gray-900 dark:text-white'}`}>
+                                      {percentage}%
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                       <span className="text-[10px] font-bold text-gray-400 uppercase">{option.votes} voix</span>
+                                    </div>
+                                  </div>
+                             </div>
+                          </button>
                         </div>
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{poll.totalVotes} PARTICIPANTS</span>
-                    </div>
-                    <button onClick={() => { setSelectedPollForResults(poll); setIsResultsModalOpen(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-gray-50 dark:bg-gray-800 text-gray-500 hover:text-primary-500 hover:bg-primary-50 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest group">
-                       <TrendingUp size={16} className="group-hover:translate-y-[-2px] transition-transform" /> ANALYSE
-                    </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* Expanded Section with More Charts */}
+                {isExpanded && (
+                  <div className="mt-12 pt-12 border-t-2 border-dashed border-gray-100 dark:border-gray-800 space-y-10 animate-in slide-in-from-top-4 duration-500">
+                    <div className="grid md:grid-cols-2 gap-10">
+                      <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700">
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <TrendingUp size={14} className="text-primary-500" /> Répartition Analytique
+                        </h4>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={poll.options} layout="vertical">
+                              <XAxis type="number" hide />
+                              <YAxis dataKey="label" type="category" hide />
+                              <Tooltip 
+                                contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: '900', fontSize: '10px' }}
+                              />
+                              <Bar dataKey="votes" radius={[0, 10, 10, 0]}>
+                                {poll.options.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.id === poll.userVoteOptionId ? '#0ea5e9' : '#e2e8f0'} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col justify-center space-y-6">
+                        <div className="p-8 bg-primary-500 text-white rounded-[2.5rem] shadow-xl shadow-primary-500/20 relative overflow-hidden">
+                           <Users className="absolute -bottom-6 -right-6 w-32 h-32 opacity-10" />
+                           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Participation Totale</p>
+                           <h4 className="text-5xl font-black italic tracking-tighter mt-2">{poll.totalVotes}</h4>
+                           <p className="text-[11px] font-bold mt-4 uppercase tracking-widest">Voix exprimées à l'ESP</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-6 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Statut</span>
+                            <p className={`text-sm font-black italic mt-1 ${isActuallyActive ? 'text-green-500' : 'text-gray-500'}`}>
+                              {isActuallyActive ? 'ACTIF' : 'CLOS'}
+                            </p>
+                          </div>
+                          <div className="p-6 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Type</span>
+                            <p className="text-sm font-black italic mt-1 text-primary-500 uppercase">ANONYME</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center">
+                       <button 
+                        onClick={() => toggleExpand(poll.id)}
+                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest italic shadow-xl hover:scale-105 active:scale-95 transition-all"
+                       >
+                         <ChevronUp size={16} /> Replier les détails
+                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer simple (si non étendu) */}
+                {!isExpanded && (
+                  <div className="mt-8 pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between opacity-60">
+                     <div className="flex items-center gap-3">
+                        <Users size={16} className="text-gray-400" />
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">{poll.totalVotes} PARTICIPANTS</span>
+                     </div>
+                     <span className="text-[9px] font-black text-primary-500 uppercase tracking-[0.2em] italic group-hover:translate-x-2 transition-transform">Cliquez pour analyser <ChevronDown className="-rotate-90 inline ml-1" size={12}/></span>
+                  </div>
+                )}
               </div>
             );
         })}
@@ -293,7 +388,7 @@ export default function Polls() {
           <div className="grid grid-cols-2 gap-4">
              <div>
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Classe cible</label>
-                <select value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 font-bold text-xs">
+                <select value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 font-bold text-xs uppercase">
                     <option value="">Général</option>
                     {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
@@ -304,56 +399,11 @@ export default function Polls() {
              </div>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-3 uppercase tracking-widest active:scale-95">
+          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-3 uppercase tracking-widest active:scale-95 italic">
             {submitting ? <Loader2 className="animate-spin" /> : <Vote size={24} />}
-            {submitting ? 'Publication en cours...' : 'Programmer la consultation'}
+            {submitting ? 'Publication...' : 'Ouvrir le scrutin'}
           </button>
         </form>
-      </Modal>
-
-      <Modal isOpen={isResultsModalOpen} onClose={() => setIsResultsModalOpen(false)} title="Analyse détaillée des voix">
-        {selectedPollForResults && (
-          <div className="space-y-8">
-             <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100">
-                <h4 className="text-sm font-black text-gray-800 italic mb-4">Question : {selectedPollForResults.question}</h4>
-                <div className="h-[300px] w-full relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie 
-                                data={selectedPollForResults.options as any[]} 
-                                cx="50%" cy="50%" 
-                                innerRadius={70} 
-                                outerRadius={100} 
-                                paddingAngle={8} 
-                                dataKey="votes" 
-                                nameKey="label" 
-                                stroke="none"
-                            >
-                                {selectedPollForResults.options.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={COLOR_PALETTE[index % COLOR_PALETTE.length].start} />
-                                ))}
-                            </Pie>
-                            <Tooltip 
-                                contentStyle={{ borderRadius: '1.5rem', fontWeight: '800', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} 
-                            />
-                            <Legend verticalAlign="bottom" iconType="circle" />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-             </div>
-             
-             <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100">
-                    <span className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Total Voix</span>
-                    <span className="text-3xl font-black text-blue-600">{selectedPollForResults.totalVotes}</span>
-                </div>
-                <div className="p-5 bg-purple-50 rounded-2xl border border-purple-100">
-                    <span className="block text-[10px] font-black text-purple-400 uppercase tracking-widest">Classe</span>
-                    <span className="text-lg font-black text-purple-600 truncate block">{selectedPollForResults.className || 'Global'}</span>
-                </div>
-             </div>
-          </div>
-        )}
       </Modal>
     </div>
   );
