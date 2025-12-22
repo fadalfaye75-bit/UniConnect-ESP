@@ -1,107 +1,58 @@
 
-# 🎓 UniConnect ESP - Ultimate Edition
+# 🎓 UniConnect ESP - Système de Gestion
 
-Plateforme de gestion universitaire centralisée pour l'ESP Dakar.
+## 🚀 Script SQL pour les Interactions et Partages
 
-## 🛠️ Script SQL de Migration (Important)
-
-Exécutez ce code dans le **SQL Editor** de Supabase pour configurer la base de données.
+Exécutez ce script dans votre SQL Editor Supabase pour activer le suivi des partages et les compteurs. Ce script est conçu pour être ré-exécutable sans erreurs.
 
 ```sql
--- 1. EXTENSIONS
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- 1. AJOUT DES COMPTEURS DE PARTAGE SUR LES TABLES EXISTANTES
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS share_count INTEGER DEFAULT 0;
+ALTER TABLE public.exams ADD COLUMN IF NOT EXISTS share_count INTEGER DEFAULT 0;
+ALTER TABLE public.polls ADD COLUMN IF NOT EXISTS share_count INTEGER DEFAULT 0;
 
--- 2. TABLES PRINCIPALES
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    role TEXT DEFAULT 'STUDENT',
-    classname TEXT DEFAULT 'Général',
-    school_name TEXT DEFAULT 'ESP Dakar',
-    avatar TEXT,
-    theme_color TEXT DEFAULT '#0ea5e9',
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 2. TABLE DES FAVORIS
+CREATE TABLE IF NOT EXISTS public.favorites (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    content_id UUID NOT NULL,
+    content_type TEXT NOT NULL, -- 'announcement' ou 'schedule'
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, content_id, content_type)
 );
 
-CREATE TABLE IF NOT EXISTS public.announcements (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    priority TEXT DEFAULT 'normal',
-    classname TEXT DEFAULT 'Général',
-    author TEXT,
-    date TIMESTAMPTZ DEFAULT NOW(),
-    links JSONB DEFAULT '[]',
-    attachments JSONB DEFAULT '[]'
+-- 3. CRÉATION DE LA TABLE DES INTERACTIONS (LOGS DE PARTAGE)
+CREATE TABLE IF NOT EXISTS public.interactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    content_id UUID NOT NULL,
+    content_type TEXT NOT NULL, -- 'announcement', 'exam', 'poll', 'schedule'
+    action_type TEXT NOT NULL DEFAULT 'share', -- 'share', 'view'
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.polls (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    question TEXT NOT NULL,
-    classname TEXT DEFAULT 'Général',
-    is_active BOOLEAN DEFAULT true,
-    start_time TIMESTAMPTZ,
-    end_time TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.poll_options (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    poll_id UUID REFERENCES public.polls ON DELETE CASCADE,
-    label TEXT NOT NULL,
-    votes INTEGER DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS public.poll_votes (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    poll_id UUID REFERENCES public.polls ON DELETE CASCADE,
-    option_id UUID REFERENCES public.poll_options ON DELETE CASCADE,
-    user_id UUID REFERENCES public.profiles ON DELETE CASCADE,
-    UNIQUE(poll_id, user_id)
-);
-
--- 3. POLITIQUES DE SÉCURITÉ (RLS)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
-ALTER TABLE public.polls ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Polls are viewable by class or admin" ON public.polls FOR SELECT 
-USING (classname = 'Général' OR classname = (SELECT classname FROM profiles WHERE id = auth.uid()) OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'ADMIN');
-
-CREATE POLICY "Manage polls (Admin/Delegate)" ON public.polls FOR ALL
-USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('ADMIN', 'DELEGATE'));
-
--- 4. LOGIQUE DE VOTE (Trigger pour incrémenter les voix)
-CREATE OR REPLACE FUNCTION public.handle_poll_vote()
-RETURNS trigger AS $$
+-- 4. FONCTION RPC POUR L'INCRÉMENTATION ATOMIQUE
+CREATE OR REPLACE FUNCTION public.increment_share_count(target_table TEXT, target_id UUID)
+RETURNS void AS $$
 BEGIN
-  UPDATE public.poll_options SET votes = votes + 1 WHERE id = NEW.option_id;
-  -- Si c'est un changement de vote, on décrémente l'ancien (géré par l'application via suppression/insertion si nécessaire)
-  RETURN NEW;
+    EXECUTE format('UPDATE public.%I SET share_count = share_count + 1 WHERE id = $1', target_table)
+    USING target_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. TRIGGER DE CRÉATION DE PROFIL AUTOMATIQUE
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, name, email, role, classname, is_active, theme_color)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'name', 'Étudiant'),
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'role', 'STUDENT'),
-    COALESCE(new.raw_user_meta_data->>'className', 'Général'),
-    true,
-    '#0ea5e9'
-  );
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 5. SÉCURITÉ RLS (Nettoyage et ré-application propre)
+ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.interactions ENABLE ROW LEVEL SECURITY;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+-- Suppression des politiques existantes pour éviter l'erreur 42710
+DROP POLICY IF EXISTS "Users can manage their own favorites" ON public.favorites;
+DROP POLICY IF EXISTS "Users can log their shares" ON public.interactions;
+
+-- Création des nouvelles politiques
+CREATE POLICY "Users can manage their own favorites" ON public.favorites FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can log their shares" ON public.interactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 6. INDEXATION
+CREATE INDEX IF NOT EXISTS idx_favorites_user ON public.favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_interactions_content ON public.interactions(content_id, content_type);
 ```

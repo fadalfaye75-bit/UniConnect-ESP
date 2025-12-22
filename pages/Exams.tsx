@@ -54,7 +54,6 @@ export default function Exams() {
       const examDate = new Date(exam.date);
       const target = exam.className || 'Général';
       
-      // Logique de visibilité : Ma classe OU Général
       const matchesClass = user?.role === UserRole.ADMIN 
         ? (adminViewClass ? (target === adminViewClass || target === 'Général') : true)
         : (target === user?.className || target === 'Général');
@@ -73,16 +72,31 @@ export default function Exams() {
   const handleCopy = (exam: Exam) => {
     const d = new Date(exam.date);
     const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    const text = `Examen: ${exam.subject}\nDate: ${dateStr} à ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\nSalle: ${exam.room}\nDurée: ${exam.duration}`;
+    const text = `📝 *UniConnect - Rappel Examen*\n🎓 Matière: ${exam.subject}\n📅 Date: ${dateStr}\n⏰ Heure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Salle: ${exam.room}\n⏱️ Durée: ${exam.duration}`;
     navigator.clipboard.writeText(text).then(() => {
-      addNotification({ title: 'Copié', message: 'Détails copiés.', type: 'success' });
+      addNotification({ title: 'Copié', message: 'Détails de l\'épreuve copiés.', type: 'success' });
     });
   };
 
-  const handleShare = (exam: Exam) => {
-    const subject = encodeURIComponent(`Examen UniConnect: ${exam.subject}`);
-    const body = encodeURIComponent(`Rappel Examen\n\nMatière: ${exam.subject}\nDate: ${new Date(exam.date).toLocaleString()}\nSalle: ${exam.room}\nNotes: ${exam.notes || 'Aucune'}`);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  const handleRelay = async (exam: Exam) => {
+    const d = new Date(exam.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const structuredContent = `📝 *PROGRAMME EXAMEN UniConnect*\n\n🎓 *Matière:* ${exam.subject}\n📅 *Date:* ${dateStr}\n⏰ *Heure:* ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 *Salle:* ${exam.room}\n⏱️ *Durée:* ${exam.duration}\n\n🍀 _Bonne chance à tous !_\n_Diffusé via UniConnect ESP_`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Examen: ${exam.subject}`,
+          text: structuredContent
+        });
+      } else {
+        await navigator.clipboard.writeText(structuredContent);
+        addNotification({ title: 'Contenu copié', message: 'Fiche d\'examen prête à être partagée.', type: 'success' });
+      }
+      await API.interactions.incrementShare('exams', exam.id);
+    } catch (e) {
+      console.debug("Share exam ended", e);
+    }
   };
 
   const openNewModal = () => {
@@ -195,8 +209,6 @@ export default function Exams() {
           const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
           const isUrgent = daysDiff >= 0 && daysDiff <= 3;
           const isPassed = timeDiff < 0;
-          const dayString = examDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-          const capitalizedDate = dayString.charAt(0).toUpperCase() + dayString.slice(1);
           
           return (
             <div 
@@ -242,17 +254,11 @@ export default function Exams() {
                     </div>
                   )}
                 </div>
-
-                {exam.notes && (
-                  <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-l-4 border-primary-500">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium italic">"{exam.notes}"</p>
-                  </div>
-                )}
               </div>
 
               <div className="flex md:flex-col items-center justify-end gap-2 pt-6 md:pt-0 md:pl-8 border-t md:border-t-0 md:border-l border-gray-50 dark:border-gray-800">
-                <button onClick={() => handleCopy(exam)} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-2xl transition-all" title="Détails"><Copy size={20} /></button>
-                <button onClick={() => handleShare(exam)} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-2xl transition-all" title="Email"><Share2 size={20} /></button>
+                <button onClick={() => handleRelay(exam)} className="p-3 text-white bg-gray-900 dark:bg-gray-800 hover:scale-110 rounded-2xl shadow-lg transition-all" title="Relayer Directement"><Share2 size={20} /></button>
+                <button onClick={() => handleCopy(exam)} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-2xl transition-all" title="Copier les détails"><Copy size={20} /></button>
                 {canManage && (
                   <>
                     <button onClick={() => handleEdit(exam)} className="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all"><Pencil size={20} /></button>
@@ -263,60 +269,29 @@ export default function Exams() {
             </div>
           );
         })}
-
-        {displayedExams.length === 0 && (
-          <div className="text-center py-24 bg-white dark:bg-gray-900 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
-             <div className="w-20 h-20 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Search size={32} className="text-gray-200" />
-             </div>
-             <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic">Aucun examen trouvé</p>
-          </div>
-        )}
       </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editer l'Épreuve" : "Programmer un examen"}>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-primary-50 dark:bg-primary-900/10 p-4 rounded-2xl border border-primary-100 dark:border-primary-800 mb-4 flex gap-3">
-             <Sparkles className="text-primary-500 shrink-0" size={20} />
-             <p className="text-[10px] text-primary-600 dark:text-primary-400 font-bold uppercase leading-relaxed">Cette épreuve sera visible instantanément par les étudiants de : <strong>{user?.role === UserRole.ADMIN && adminViewClass ? adminViewClass : (user?.className || 'Général')}</strong></p>
-          </div>
-          
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Matière</label>
-              <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" placeholder="ex: Analyse Mathématique" />
+              <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none" placeholder="ex: Analyse Mathématique" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Date</label>
-                <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Heure</label>
-                <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" />
-              </div>
+              <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
+              <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Salle</label>
-                <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" placeholder="Amphi B" />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Durée</label>
-                <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="ex: 2h" className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Notes</label>
-              <textarea rows={3} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 outline-none transition-all font-bold" placeholder="Détails supplémentaires..." />
+              <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" placeholder="Salle" />
+              <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="Durée" className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
             </div>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-2 active:scale-95 uppercase tracking-widest">
-            {submitting ? <Loader2 className="animate-spin" /> : (editingId ? "Sauvegarder les modifications" : "Programmer l'épreuve")}
+          <button type="submit" disabled={submitting} className="w-full bg-primary-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all uppercase tracking-widest">
+            {editingId ? "Sauvegarder" : "Programmer l'épreuve"}
           </button>
         </form>
       </Modal>

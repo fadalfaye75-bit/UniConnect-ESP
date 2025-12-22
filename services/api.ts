@@ -8,7 +8,6 @@ import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppN
  */
 const handleAPIError = (error: any, fallback: string) => {
   if (!error) return;
-  // PGRST116: single object not found - souvent attendu dans les checks initiaux
   if (error.code === 'PGRST116') return;
   
   console.error(`[UniConnect API Error] ${fallback}:`, JSON.stringify(error, null, 2));
@@ -75,7 +74,7 @@ export const API = {
     createUser: async (userData: { name: string, email: string, role: UserRole, className: string, schoolName?: string }) => {
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
-        password: 'passer25', // Par défaut
+        password: 'passer25',
         options: { 
           data: { 
             name: userData.name, 
@@ -102,6 +101,60 @@ export const API = {
       if (error) handleAPIError(error, "Échec de modification du mot de passe");
     }
   },
+  favorites: {
+    toggle: async (contentId: string, contentType: 'announcement' | 'schedule') => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      
+      const { data: existing } = await supabase
+        .from('favorites')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('content_id', contentId)
+        .eq('content_type', contentType)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from('favorites').delete().eq('id', existing.id);
+        return false;
+      } else {
+        await supabase.from('favorites').insert({
+          user_id: session.user.id,
+          content_id: contentId,
+          content_type: contentType
+        });
+        return true;
+      }
+    },
+    list: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return [];
+      const { data, error } = await supabase.from('favorites').select('*').eq('user_id', session.user.id);
+      if (error) return [];
+      return data;
+    }
+  },
+  interactions: {
+    incrementShare: async (table: 'announcements' | 'exams' | 'polls', id: string) => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        
+        // Log de l'interaction
+        await supabase.from('interactions').insert({
+          user_id: session.user.id,
+          content_id: id,
+          content_type: table.slice(0, -1),
+          action_type: 'share'
+        });
+
+        // Incrémentation via la fonction RPC SQL pour la rapidité
+        await supabase.rpc('increment_share_count', { target_table: table, target_id: id });
+      } catch (e) {
+        console.warn("Share count update failed silentely", e);
+      }
+    }
+  },
   announcements: {
     list: async (page: number, size: number): Promise<Announcement[]> => {
       const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false }).range(page * size, (page + 1) * size - 1);
@@ -114,13 +167,22 @@ export const API = {
         title: ann.title, 
         content: ann.content, 
         priority: ann.priority, 
-        classname: ann.className, 
+        classname: ann.className || 'Général', 
         author: profile?.name || 'Système', 
         links: ann.links || [], 
         attachments: ann.attachments || [], 
         date: new Date().toISOString() 
       });
       if (error) handleAPIError(error, "Publication échouée");
+
+      // Auto-notification
+      await API.notifications.add({
+        title: `Nouvelle Annonce: ${ann.title}`,
+        message: ann.content.substring(0, 100) + '...',
+        type: ann.priority === 'urgent' ? 'alert' : 'info',
+        targetClass: ann.className || 'Général',
+        link: '/announcements'
+      });
     },
     update: async (id: string, ann: any) => {
       const { error } = await supabase.from('announcements').update({ 
@@ -150,6 +212,15 @@ export const API = {
     create: async (exam: any) => {
       const { error } = await supabase.from('exams').insert({ subject: exam.subject, date: exam.date, duration: exam.duration, room: exam.room, notes: exam.notes, classname: exam.className });
       if (error) handleAPIError(error, "Action impossible");
+
+      // Auto-notification
+      await API.notifications.add({
+        title: `Examen programmé: ${exam.subject}`,
+        message: `Épreuve prévue le ${new Date(exam.date).toLocaleDateString()} en salle ${exam.room}.`,
+        type: 'warning',
+        targetClass: exam.className || 'Général',
+        link: '/exams'
+      });
     },
     update: async (id: string, exam: any) => {
       const { error } = await supabase.from('exams').update({ subject: exam.subject, date: exam.date, duration: exam.duration, room: exam.room, notes: exam.notes }).eq('id', id);
@@ -169,6 +240,15 @@ export const API = {
     create: async (meet: any) => {
       const { error } = await supabase.from('meet_links').insert({ title: meet.title, platform: meet.platform, url: meet.url, time: meet.time, classname: meet.className });
       if (error) handleAPIError(error, "Action impossible");
+
+      // Auto-notification
+      await API.notifications.add({
+        title: `Visioconférence: ${meet.title}`,
+        message: `Cours en ligne programmé sur ${meet.platform}.`,
+        type: 'info',
+        targetClass: meet.className || 'Général',
+        link: '/meet'
+      });
     },
     update: async (id: string, meet: any) => {
       const { error } = await supabase.from('meet_links').update({ title: meet.title, platform: meet.platform, url: meet.url, time: meet.time }).eq('id', id);
@@ -221,11 +301,20 @@ export const API = {
       const options = poll.options.map((o: any) => ({ poll_id: data.id, label: o.label, votes: 0 }));
       const { error: optError } = await supabase.from('poll_options').insert(options);
       if (optError) handleAPIError(optError, "Échec création options");
+
+      // Auto-notification
+      await API.notifications.add({
+        title: "Nouvelle Consultation",
+        message: poll.question,
+        type: 'info',
+        targetClass: poll.className || 'Général',
+        link: '/polls'
+      });
     },
     update: async (id: string, updates: any) => {
       const dbUpdates: any = {};
       if (updates.question !== undefined) dbUpdates.question = updates.question;
-      if (updates.className !== undefined) dbUpdates.classname = updates.className;
+      if (updates.className !== undefined) dbUpdates.classname = updates.classname;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
       if (updates.startTime !== undefined) dbUpdates.start_time = updates.startTime;
       if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
@@ -269,6 +358,15 @@ export const API = {
     create: async (sch: any) => {
       const { error } = await supabase.from('schedules').insert({ version: sch.version, url: sch.url, classname: sch.className, category: sch.category, upload_date: new Date().toISOString() });
       if (error) handleAPIError(error, "Publication impossible");
+
+      // Auto-notification
+      await API.notifications.add({
+        title: "Nouveau Document",
+        message: `Le document ${sch.category} (${sch.version}) est disponible.`,
+        type: 'info',
+        targetClass: sch.className || 'Général',
+        link: '/schedule'
+      });
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('schedules').delete().eq('id', id);
@@ -303,7 +401,7 @@ export const API = {
       const { error } = await supabase.from('notifications').delete().eq('target_user_id', profile.id);
       if (error) handleAPIError(error, "Action impossible");
     },
-    subscribe: (userId: string, callback: () => void) => {
+    subscribe: (userId: string, callback: (payload: any) => void) => {
       return supabase.channel(`notifs_stream_${userId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, callback).subscribe();
     }
   },

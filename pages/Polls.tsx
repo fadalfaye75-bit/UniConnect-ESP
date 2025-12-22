@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power } from 'lucide-react';
+import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Poll, ClassGroup } from '../types';
 import Modal from '../components/Modal';
@@ -123,6 +123,25 @@ export default function Polls() {
     }
   };
 
+  const handleRelay = async (poll: Poll) => {
+    const structuredContent = `🗳️ *UniConnect - Consultation Étudiante*\n\n❓ *Question:* ${poll.question}\n\n📌 *Classe:* ${poll.className || 'ESP Global'}\n📊 *Statut:* Vote Ouvert\n\n📢 Votre avis compte pour la prise de décision. Vient voter directement sur le portail UniConnect !\n\n_Diffusé par le bureau des délégués_`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Sondage: ${poll.question}`,
+          text: structuredContent
+        });
+      } else {
+        await navigator.clipboard.writeText(structuredContent);
+        addNotification({ title: 'Contenu copié', message: 'Message de consultation prêt pour diffusion.', type: 'success' });
+      }
+      await API.interactions.incrementShare('polls', poll.id);
+    } catch (e) {
+      console.debug("Share poll ended", e);
+    }
+  };
+
   const toggleExpand = (pollId: string) => {
     setExpandedPollId(expandedPollId === pollId ? null : pollId);
   };
@@ -183,35 +202,34 @@ export default function Polls() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-8 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 z-20 backdrop-blur-md">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-10">
         <div className="flex items-center gap-5">
            <div 
-            className="w-14 h-14 text-white rounded-2xl flex items-center justify-center shadow-lg"
-            style={{ backgroundColor: themeColor, boxShadow: `0 10px 15px -3px ${themeColor}33` }}
+            className="w-16 h-16 text-white rounded-[2rem] flex items-center justify-center shadow-2xl rotate-3"
+            style={{ backgroundColor: themeColor, boxShadow: `0 20px 40px -10px ${themeColor}66` }}
            >
               <BarChart2 size={32} />
            </div>
            <div>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter italic leading-none uppercase">Consultations</h2>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                 <Users size={12}/> {user?.className} • DÉCISIONNEL
+              <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic leading-none uppercase">Consultations</h2>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-3 flex items-center gap-2">
+                 <Users size={12}/> {user?.className} • DÉCISIONNEL ESP
               </p>
            </div>
         </div>
 
         <div className="flex flex-col lg:flex-row flex-1 items-center gap-3 max-w-3xl">
            <div className="relative flex-1 w-full group">
-             <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={18} />
-             {/* Fix: removed invalid 'focusRingColor' style property */}
-             <input type="text" placeholder="Rechercher un scrutin..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 transition-all font-bold italic" />
+             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={20} />
+             <input type="text" placeholder="Rechercher un scrutin..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-16 pr-6 py-5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] text-sm outline-none focus:ring-4 transition-all font-bold italic" />
            </div>
            {canManage && (
              <button 
                 onClick={() => setIsModalOpen(true)} 
-                className="flex items-center gap-2 text-white px-8 py-3.5 rounded-2xl text-xs font-black shadow-xl active:scale-95 transition-all uppercase tracking-widest italic"
-                style={{ backgroundColor: themeColor, boxShadow: `0 10px 20px -5px ${themeColor}66` }}
+                className="w-full sm:w-auto flex items-center justify-center gap-3 text-white px-10 py-5 rounded-2xl text-[11px] font-black shadow-xl active:scale-95 transition-all uppercase tracking-widest italic"
+                style={{ backgroundColor: themeColor, boxShadow: `0 15px 25px -5px ${themeColor}55` }}
              >
-               <Plus size={18} /> Nouveau Scrutin
+               <Plus size={20} /> Nouveau Scrutin
              </button>
            )}
         </div>
@@ -230,61 +248,68 @@ export default function Polls() {
               <div 
                 key={poll.id} 
                 onClick={() => !isExpanded && toggleExpand(poll.id)}
-                className={`bg-white dark:bg-gray-900 rounded-[3rem] p-8 md:p-12 shadow-soft border-2 transition-all duration-500 flex flex-col relative overflow-hidden group cursor-pointer ${
-                  isExpanded ? 'shadow-2xl scale-[1.01]' : 'border-transparent hover:border-gray-100 hover:shadow-xl'
+                className={`bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 md:p-14 shadow-soft border-2 transition-all duration-700 flex flex-col relative overflow-hidden group cursor-pointer ${
+                  isExpanded ? 'shadow-premium scale-[1.01]' : 'border-transparent hover:border-gray-100 hover:shadow-xl'
                 }`}
                 style={isExpanded ? { borderColor: themeColor } : {}}
               >
                 {/* Visual Accent */}
-                <div className={`absolute top-0 left-0 w-2 h-full ${isActuallyActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <div className={`absolute top-0 left-0 w-3 h-full ${isActuallyActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
 
-                <div className="flex flex-wrap justify-between items-start mb-8 gap-4">
+                <div className="flex flex-wrap justify-between items-start mb-10 gap-6">
                    <div className="flex flex-wrap gap-3">
-                      <div className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${isActuallyActive ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
-                        {isActuallyActive ? <><Radio className="animate-pulse" size={14} /> Scrutin en cours</> : <><Lock size={14} /> Consultation fermée</>}
+                      <div className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${isActuallyActive ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                        {isActuallyActive ? <><Radio className="animate-pulse" size={16} /> Scrutin Ouvert</> : <><Lock size={16} /> Vote Clôturé</>}
                       </div>
-                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-gray-800 px-5 py-2 rounded-full border border-gray-100 dark:border-gray-800">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-gray-800 px-6 py-3 rounded-full border border-gray-100 dark:border-gray-800">
                         {poll.className || 'ESP DAKAR'}
                       </span>
                    </div>
                    
-                   <div className="flex items-center gap-2 ml-auto">
+                   <div className="flex items-center gap-3 ml-auto">
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); handleRelay(poll); }}
+                        className="p-3.5 bg-gray-900 text-white rounded-2xl shadow-lg hover:scale-110 transition-all flex items-center gap-2"
+                        title="Relayer Directement"
+                     >
+                        <Share2 size={18} /> <span className="text-[10px] font-black uppercase hidden sm:inline">Diffuser</span>
+                     </button>
                      {canManage && (
-                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-2xl border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 p-2.5 rounded-[2rem] border border-gray-100 dark:border-gray-700">
                             <button 
                                 onClick={(e) => { e.stopPropagation(); handleTogglePollStatus(poll); }}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm ${poll.isActive ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                                className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${poll.isActive ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}
                             >
-                                {poll.isActive ? <><Lock size={14} /> Clôturer</> : <><Unlock size={14} /> Réouvrir</>}
+                                {poll.isActive ? <><Power size={14} /> Clôturer</> : <><RefreshCcw size={14} /> Réouvrir</>}
                             </button>
                             <button 
                                 onClick={(e) => { e.stopPropagation(); handleDeletePoll(poll); }}
-                                className="p-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all border border-transparent hover:border-red-100"
+                                className="p-3.5 rounded-2xl text-red-500 hover:bg-red-50 transition-all border border-transparent hover:border-red-100"
                                 title="Supprimer définitivement"
                             >
-                                <Trash2 size={18} />
+                                <Trash2 size={20} />
                             </button>
                         </div>
                      )}
                      <button 
                         onClick={(e) => { e.stopPropagation(); toggleExpand(poll.id); }}
-                        className={`p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-400 transition-all ${isExpanded ? 'rotate-180 bg-gray-200 dark:bg-gray-700' : ''}`}
+                        className={`p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-400 transition-all ${isExpanded ? 'rotate-180 bg-gray-200 dark:bg-gray-700' : ''}`}
                         style={isExpanded ? { color: themeColor } : {}}
                      >
-                        <ChevronDown size={24} />
+                        <ChevronDown size={28} />
                      </button>
                    </div>
                 </div>
 
                 <div className="flex-1">
                   <h3 
-                    className={`text-3xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tighter italic mb-10 transition-colors`}
+                    className={`text-4xl font-black text-gray-900 dark:text-white leading-[1.05] tracking-tighter italic mb-12 transition-colors duration-500`}
                     style={isExpanded ? { color: themeColor } : {}}
                   >
                     {poll.question}
                   </h3>
 
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {poll.options.map(option => {
                       const percentage = poll.totalVotes > 0 ? Math.round((option.votes / poll.totalVotes) * 100) : 0;
                       const isSelected = poll.userVoteOptionId === option.id;
@@ -296,11 +321,11 @@ export default function Polls() {
                           <button 
                             onClick={(e) => { e.stopPropagation(); if(canVote) handleVote(poll, option.id); }} 
                             disabled={!canVote} 
-                            className={`relative w-full text-left rounded-[2rem] overflow-hidden transition-all h-24 flex items-center px-10 border-2 ${
+                            className={`relative w-full text-left rounded-[2.5rem] overflow-hidden transition-all h-28 flex items-center px-12 border-2 ${
                                 isSelected 
-                                ? 'bg-gray-50/20 shadow-lg' 
+                                ? 'bg-gray-50/20 shadow-xl' 
                                 : 'border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-900'
-                            } ${!canVote ? 'cursor-default' : 'hover:translate-x-1 active:scale-95'}`}
+                            } ${!canVote ? 'cursor-default' : 'hover:translate-x-2 active:scale-95'}`}
                             style={isSelected ? { borderColor: themeColor } : {}}
                           >
                              {/* Progress Bar with Gradient */}
@@ -313,23 +338,23 @@ export default function Polls() {
                              />
                              
                              <div className="flex-1 flex items-center justify-between z-10 relative">
-                                  <div className="flex items-center gap-6 min-w-0">
+                                  <div className="flex items-center gap-8 min-w-0">
                                     <div 
-                                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'text-white scale-125' : 'border-gray-200'}`}
+                                        className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'text-white scale-125' : 'border-gray-200'}`}
                                         style={isSelected ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
                                     >
-                                       {isSelected ? <Check size={16} strokeWidth={4} /> : null}
+                                       {isSelected ? <Check size={20} strokeWidth={4} /> : null}
                                     </div>
                                     <div className="min-w-0">
                                       <p 
-                                        className={`text-lg font-black italic truncate ${isSelected ? '' : 'text-gray-800 dark:text-gray-200'}`}
+                                        className={`text-xl font-black italic truncate ${isSelected ? '' : 'text-gray-800 dark:text-gray-200'}`}
                                         style={isSelected ? { color: themeColor } : {}}
                                       >
                                         {option.label}
                                       </p>
                                       {isLeader && isExpanded && (
-                                        <span className="text-[9px] font-black text-amber-500 uppercase flex items-center gap-1 mt-1">
-                                          <Trophy size={10} /> En tête du vote
+                                        <span className="text-[10px] font-black text-amber-500 uppercase flex items-center gap-1 mt-1">
+                                          <Trophy size={12} /> Choix Majoritaire
                                         </span>
                                       )}
                                     </div>
@@ -337,13 +362,13 @@ export default function Polls() {
 
                                   <div className="flex flex-col items-end shrink-0 ml-4">
                                     <span 
-                                        className={`text-3xl font-black italic tracking-tighter ${isSelected ? '' : 'text-gray-900 dark:text-white'}`}
+                                        className={`text-4xl font-black italic tracking-tighter ${isSelected ? '' : 'text-gray-900 dark:text-white'}`}
                                         style={isSelected ? { color: themeColor } : {}}
                                     >
                                       {percentage}%
                                     </span>
                                     <div className="flex items-center gap-2">
-                                       <span className="text-[10px] font-bold text-gray-400 uppercase">{option.votes} voix</span>
+                                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{option.votes} voix</span>
                                     </div>
                                   </div>
                              </div>
@@ -355,21 +380,22 @@ export default function Polls() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-12 pt-12 border-t-2 border-dashed border-gray-100 dark:border-gray-800 space-y-10 animate-in slide-in-from-top-4 duration-500">
-                    <div className="grid md:grid-cols-2 gap-10">
-                      <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700">
-                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                          <TrendingUp size={14} style={{ color: themeColor }} /> Répartition Analytique
+                  <div className="mt-14 pt-14 border-t-2 border-dashed border-gray-100 dark:border-gray-800 space-y-12 animate-in slide-in-from-top-6 duration-700">
+                    <div className="grid md:grid-cols-2 gap-12">
+                      <div className="bg-gray-50 dark:bg-gray-800/40 p-10 rounded-[3rem] border border-gray-100 dark:border-gray-700">
+                        <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                          <TrendingUp size={16} style={{ color: themeColor }} /> Analytique en temps réel
                         </h4>
-                        <div className="h-64">
+                        <div className="h-72">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={poll.options} layout="vertical">
                               <XAxis type="number" hide />
                               <YAxis dataKey="label" type="category" hide />
                               <Tooltip 
-                                contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: '900', fontSize: '10px' }}
+                                cursor={{fill: 'transparent'}}
+                                contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', fontWeight: '900', fontSize: '11px' }}
                               />
-                              <Bar dataKey="votes" radius={[0, 10, 10, 0]}>
+                              <Bar dataKey="votes" radius={[0, 15, 15, 0]} barSize={30}>
                                 {poll.options.map((entry, index) => (
                                   <Cell key={`cell-${index}`} fill={entry.id === poll.userVoteOptionId ? themeColor : '#e2e8f0'} />
                                 ))}
@@ -379,50 +405,18 @@ export default function Polls() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col justify-center space-y-6">
+                      <div className="flex flex-col justify-center space-y-8">
                         <div 
-                            className="p-8 text-white rounded-[2.5rem] shadow-xl relative overflow-hidden"
-                            style={{ backgroundColor: themeColor, boxShadow: `0 20px 25px -5px ${themeColor}33` }}
+                            className="p-10 text-white rounded-[3rem] shadow-premium relative overflow-hidden"
+                            style={{ backgroundColor: themeColor, boxShadow: `0 25px 35px -10px ${themeColor}44` }}
                         >
-                           <Users className="absolute -bottom-6 -right-6 w-32 h-32 opacity-10" />
-                           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Participation Totale</p>
-                           <h4 className="text-5xl font-black italic tracking-tighter mt-2">{poll.totalVotes}</h4>
-                           <p className="text-[11px] font-bold mt-4 uppercase tracking-widest">Voix exprimées à l'ESP</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-6 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Statut</span>
-                            <p className={`text-sm font-black italic mt-1 ${isActuallyActive ? 'text-green-500' : 'text-gray-500'}`}>
-                              {isActuallyActive ? 'ACTIF' : 'CLOS'}
-                            </p>
-                          </div>
-                          <div className="p-6 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Type</span>
-                            <p className="text-sm font-black italic mt-1 uppercase" style={{ color: themeColor }}>ANONYME</p>
-                          </div>
+                           <Users className="absolute -bottom-8 -right-8 w-40 h-40 opacity-10" />
+                           <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-60">Quorum ESP atteint</p>
+                           <h4 className="text-6xl font-black italic tracking-tighter mt-3">{poll.totalVotes}</h4>
+                           <p className="text-[12px] font-bold mt-5 uppercase tracking-widest">Voix uniques certifiées</p>
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex justify-center">
-                       <button 
-                        onClick={() => toggleExpand(poll.id)}
-                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest italic shadow-xl hover:scale-105 active:scale-95 transition-all"
-                       >
-                         <ChevronUp size={16} /> Replier les détails
-                       </button>
-                    </div>
-                  </div>
-                )}
-
-                {!isExpanded && (
-                  <div className="mt-8 pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between opacity-60">
-                     <div className="flex items-center gap-3">
-                        <Users size={16} className="text-gray-400" />
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">{poll.totalVotes} PARTICIPANTS</span>
-                     </div>
-                     <span className="text-[9px] font-black uppercase tracking-[0.2em] italic group-hover:translate-x-2 transition-transform" style={{ color: themeColor }}>Cliquez pour analyser <ChevronDown className="-rotate-90 inline ml-1" size={12}/></span>
                   </div>
                 )}
               </div>
@@ -430,59 +424,14 @@ export default function Polls() {
         })}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Lancer une consultation">
-        <form onSubmit={handleCreatePoll} className="space-y-6">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Engager une consultation">
+        <form onSubmit={handleCreatePoll} className="space-y-8">
           <div>
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Question de la consultation</label>
-            {/* Fix: removed invalid 'focusRingColor' style property */}
-            <textarea required rows={3} value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-5 py-4 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none focus:ring-4 transition-all italic text-lg" placeholder="Quelle est votre opinion sur..." />
+            <textarea required rows={4} value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-8 py-6 rounded-[2rem] border-none bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-black italic outline-none focus:ring-4 transition-all text-xl" placeholder="Objet de la décision..." />
           </div>
-          <div className="space-y-3">
-             <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Options de réponse</label>
-             {newPoll.options.map((opt, idx) => (
-                <div key={idx} className="relative group">
-                    <input required type="text" value={opt} placeholder={`Option ${idx + 1}`} onChange={e => {
-                        const next = [...newPoll.options];
-                        next[idx] = e.target.value;
-                        setNewPoll({...newPoll, options: next});
-                    }} className="w-full px-5 py-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold focus:bg-white transition-all" />
-                    {newPoll.options.length > 2 && (
-                        <button type="button" onClick={() => setNewPoll({...newPoll, options: newPoll.options.filter((_, i) => i !== idx)})} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-500"><X size={16}/></button>
-                    )}
-                </div>
-             ))}
-             <button 
-                type="button" 
-                onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} 
-                className="text-[10px] font-black uppercase flex items-center gap-2 py-3 px-4 rounded-xl w-full justify-center border border-dashed hover:bg-opacity-20 transition-all"
-                style={{ color: themeColor, borderColor: themeColor, backgroundColor: `${themeColor}11` }}
-             >
-                <Plus size={16} /> Ajouter un choix
-             </button>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-             <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Classe cible</label>
-                <select value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 font-bold text-xs uppercase">
-                    <option value="">Général</option>
-                    {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                </select>
-             </div>
-             <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Date de clôture</label>
-                <input type="date" value={newPoll.endTime} onChange={e => setNewPoll({...newPoll, endTime: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 font-bold text-xs" />
-             </div>
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={submitting} 
-            className="w-full text-white font-black py-5 rounded-2xl shadow-xl transition-all flex justify-center items-center gap-3 uppercase tracking-widest active:scale-95 italic"
-            style={{ backgroundColor: themeColor, boxShadow: `0 15px 25px -5px ${themeColor}55` }}
-          >
-            {submitting ? <Loader2 className="animate-spin" /> : <Vote size={24} />}
-            {submitting ? 'Publication...' : 'Ouvrir le scrutin'}
+          <button type="submit" disabled={submitting} className="w-full text-white font-black py-6 rounded-[2.5rem] shadow-2xl transition-all flex justify-center items-center gap-4 uppercase tracking-widest italic active:scale-95" style={{ backgroundColor: themeColor }}>
+            {submitting ? <Loader2 className="animate-spin" /> : <Vote size={28} />}
+            {submitting ? 'Lancement...' : 'Ouvrir les votes'}
           </button>
         </form>
       </Modal>

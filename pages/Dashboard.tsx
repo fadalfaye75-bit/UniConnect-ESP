@@ -3,11 +3,13 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../services/api';
 import { Announcement, Exam, UserRole, Poll, MeetLink } from '../types';
-import { Clock, FileText, GraduationCap, Loader2, ChevronRight, BarChart2, Calendar, Video, Settings, ArrowRight, User as UserIcon, Sparkles, Megaphone, Radio, Zap, TrendingUp, CheckCircle2, MapPin } from 'lucide-react';
+import { Clock, FileText, GraduationCap, Loader2, ChevronRight, BarChart2, Calendar, Video, Settings, ArrowRight, User as UserIcon, Sparkles, Megaphone, Radio, Zap, TrendingUp, CheckCircle2, MapPin, BellRing, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useNotification } from '../context/NotificationContext';
 
 export default function Dashboard() {
   const { user, adminViewClass } = useAuth();
+  const { permission, requestPermission } = useNotification();
   const navigate = useNavigate();
   const isAdmin = user?.role === UserRole.ADMIN;
   const themeColor = user?.themeColor || '#0ea5e9';
@@ -94,14 +96,29 @@ export default function Dashboard() {
            </p>
         </div>
         
-        <div className="flex items-center gap-4 bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-800 group hover:border-gray-300 transition-all cursor-default">
-           <Calendar size={24} style={{ color: themeColor }} className="group-hover:rotate-12 transition-transform" />
-           <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Date du jour</p>
-              <span className="text-sm font-black text-gray-900 dark:text-white italic capitalize">
-                {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </span>
-           </div>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4 bg-white dark:bg-gray-900 p-6 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-800 group hover:border-gray-300 transition-all cursor-default">
+             <Calendar size={24} style={{ color: themeColor }} className="group-hover:rotate-12 transition-transform" />
+             <div className="text-right">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Date du jour</p>
+                <span className="text-sm font-black text-gray-900 dark:text-white italic capitalize">
+                  {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </span>
+             </div>
+          </div>
+          
+          {permission === 'default' && (
+            <button 
+              onClick={requestPermission}
+              className="flex items-center gap-4 bg-emerald-500 text-white p-6 rounded-[2.5rem] shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all group"
+            >
+              <BellRing size={24} className="animate-bounce" />
+              <div className="text-left">
+                 <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Alertes Campus</p>
+                 <span className="text-sm font-black italic">Activer les Notifications</span>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 

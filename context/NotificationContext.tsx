@@ -22,6 +22,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [permission, setPermission] = useState<NotificationPermission>('default');
 
+  const triggerBrowserNotification = useCallback((title: string, message: string) => {
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: '/favicon.ico' // Optionnel: ajouter un logo ESP si disponible
+      });
+    }
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
@@ -46,15 +55,27 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     fetchNotifications();
 
-    // Souscription temps réel au lieu du polling
-    const subscription = API.notifications.subscribe(user.id, () => {
-      fetchNotifications();
+    // Souscription temps réel
+    const subscription = API.notifications.subscribe(user.id, (payload) => {
+      const newNotif = payload.new;
+      
+      // Vérifier si la notification concerne l'utilisateur
+      const isTargeted = 
+        !newNotif.target_user_id || newNotif.target_user_id === user.id ||
+        newNotif.target_role === user.role ||
+        newNotif.target_class === user.className ||
+        newNotif.target_class === 'Général';
+
+      if (isTargeted) {
+        fetchNotifications();
+        triggerBrowserNotification(newNotif.title, newNotif.message);
+      }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [user, fetchNotifications]);
+  }, [user, fetchNotifications, triggerBrowserNotification]);
 
   const requestPermission = async () => {
     if (!("Notification" in window)) return;
@@ -64,7 +85,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const addNotification = async (notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
     await API.notifications.add(notif);
-    // Le refresh se fera via la subscription temps réel
   };
 
   const markAsRead = async (id: string) => {
