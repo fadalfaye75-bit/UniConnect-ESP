@@ -266,7 +266,11 @@ export default function Layout() {
           <div className="flex items-center gap-4 relative" ref={notifRef}>
              <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-2.5 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl relative transition-all active:scale-95 ${isNotifOpen ? 'bg-gray-100 dark:bg-gray-800' : ''}`}>
                <Bell size={22} />
-               {unreadCount > 0 && <span className="absolute top-2 right-2.5 w-3 h-3 bg-red-500 rounded-full ring-2 ring-white dark:ring-gray-900 animate-pulse"></span>}
+               {unreadCount > 0 && (
+                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full ring-2 ring-white dark:ring-gray-900 flex items-center justify-center animate-in zoom-in-50 duration-300">
+                   {unreadCount > 99 ? '99+' : unreadCount}
+                 </span>
+               )}
              </button>
 
              {/* NOTIFICATION DROPDOWN */}

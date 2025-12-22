@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, Loader2, AlertCircle, ChevronRight, Eye, EyeOff } from 'lucide-react';
@@ -18,48 +17,28 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // Nettoyage des entrées
       const cleanEmail = email.trim().toLowerCase();
       await login(cleanEmail, password);
     } catch (err: any) {
-      console.error("Erreur de connexion détaillée:", err);
+      console.error("Erreur de connexion capturée:", err);
       
-      let message = "Une erreur est survenue lors de la connexion.";
+      let message = "Une erreur est survenue.";
       
-      // Extraction robuste du message d'erreur
       if (typeof err === 'string') {
         message = err;
-      } else if (err?.error_description) {
-        message = err.error_description;
-      } else if (err?.message && typeof err.message === 'string') {
+      } else if (err instanceof Error) {
         message = err.message;
-      } else if (err?.error?.message && typeof err.error.message === 'string') {
-        message = err.error.message;
-      } else if (err?.statusText) {
-        message = `Erreur ${err.status || ''}: ${err.statusText}`;
-      } else {
-        // Fallback for objects that don't have standard error properties
-        try {
-          const stringified = JSON.stringify(err);
-          if (stringified !== '{}') {
-            message = `Erreur technique: ${stringified}`;
-          }
-        } catch (e) {
-          message = "Une erreur inconnue est survenue.";
-        }
+      } else if (err && typeof err === 'object') {
+        message = err.message || err.error_description || JSON.stringify(err);
       }
 
-      // Traductions conviviales pour l'utilisateur
+      // Formatage convivial
       if (message.includes("Invalid login credentials") || message.includes("invalid_credentials")) {
         setError("Email ou mot de passe incorrect. Veuillez vérifier vos accès.");
+      } else if (message.includes("infinite recursion")) {
+        setError("Erreur système (Récursion RLS). Veuillez appliquer le correctif SQL dans le README.");
       } else if (message.includes("Email not confirmed")) {
         setError("Votre adresse email n'est pas encore confirmée.");
-      } else if (message.includes("Database error") || message.includes("infinite recursion")) {
-        setError("Problème de configuration serveur (Erreur RLS). Contactez l'administrateur.");
-      } else if (message.includes("User not found")) {
-        setError("Aucun compte associé à cet email.");
-      } else if (message.includes("Profil non trouvé")) {
-        setError("Votre compte existe mais votre profil n'a pas été initialisé. Contactez l'administrateur.");
       } else {
         setError(message);
       }
@@ -82,7 +61,7 @@ export default function Login() {
           </div>
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white tracking-tight">UniConnect ESP</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm leading-relaxed">
-            UniConnect est une plateforme de gestion scolaire universitaire centralisée. Elle connecte l'administration, les délégués et les étudiants.
+            Plateforme de gestion centralisée de l'ESP Dakar.
           </p>
         </div>
 
@@ -141,8 +120,8 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-            <p className="text-xs text-gray-400">Portail officiel de gestion de scolarité de l'ESP Dakar.</p>
+        <div className="mt-8 text-center border-t border-gray-100 dark:border-gray-700 pt-6">
+            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Portail Officiel ESP Dakar</p>
         </div>
       </div>
     </div>

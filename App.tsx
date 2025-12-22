@@ -1,21 +1,21 @@
 
 import React, { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { NotificationProvider } from './context/NotificationContext';
+import { AuthProvider, useAuth } from './context/AuthContext.tsx';
+import { NotificationProvider } from './context/NotificationContext.tsx';
 import { Loader2 } from 'lucide-react';
 
 // Lazy loaded pages
-const Layout = lazy(() => import('./components/Layout'));
-const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Announcements = lazy(() => import('./pages/Announcements'));
-const Exams = lazy(() => import('./pages/Exams'));
-const Schedule = lazy(() => import('./pages/Schedule'));
-const Meet = lazy(() => import('./pages/Meet'));
-const Polls = lazy(() => import('./pages/Polls'));
-const AdminPanel = lazy(() => import('./pages/AdminPanel'));
-const Profile = lazy(() => import('./pages/Profile'));
+const Layout = lazy(() => import('./components/Layout.tsx'));
+const Login = lazy(() => import('./pages/Login.tsx'));
+const Dashboard = lazy(() => import('./pages/Dashboard.tsx'));
+const Announcements = lazy(() => import('./pages/Announcements.tsx'));
+const Exams = lazy(() => import('./pages/Exams.tsx'));
+const Schedule = lazy(() => import('./pages/Schedule.tsx'));
+const Meet = lazy(() => import('./pages/Meet.tsx'));
+const Polls = lazy(() => import('./pages/Polls.tsx'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel.tsx'));
+const Profile = lazy(() => import('./pages/Profile.tsx'));
 
 // Utility to scroll to top on route change
 const ScrollToTop = () => {
@@ -70,7 +70,6 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        {/* Fix: Removing 'future' prop from HashRouter because it is not supported in the provided IntrinsicAttributes & HashRouterProps type definition */}
         <HashRouter>
           <AppRoutes />
         </HashRouter>

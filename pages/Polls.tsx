@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -39,8 +38,12 @@ export default function Polls() {
       if(showLoader) setLoading(true); 
       const data = await API.polls.list();
       setPolls(data);
-    } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Chargement des sondages impossible.', type: 'alert' });
+    } catch (error: any) {
+      addNotification({ 
+        title: 'Erreur', 
+        message: error?.message || 'Chargement des sondages impossible.', 
+        type: 'alert' 
+      });
     } finally {
       if(showLoader) setLoading(false);
     }
@@ -50,7 +53,8 @@ export default function Polls() {
     fetchPolls(true);
     API.classes.list().then(setClasses);
     const subscription = API.polls.subscribe(() => fetchPolls(false));
-    return () => subscription.unsubscribe();
+    // Fix: Return a void function for useEffect destructor to avoid Promise assignment error
+    return () => { subscription.unsubscribe(); };
   }, [fetchPolls]);
 
   const openCreateModal = () => {
@@ -97,9 +101,8 @@ export default function Polls() {
 
       return matchesClassFilter && matchesSearch && matchesStatus;
     }).sort((a, b) => {
-        // Fallback sur createdAt si startTime est manquant
-        const aTime = a.startTime ? new Date(a.startTime).getTime() : new Date((a as any).createdAt || 0).getTime();
-        const bTime = b.startTime ? new Date(b.startTime).getTime() : new Date((b as any).createdAt || 0).getTime();
+        const aTime = a.startTime ? new Date(a.startTime).getTime() : new Date(a.createdAt || 0).getTime();
+        const bTime = b.startTime ? new Date(b.startTime).getTime() : new Date(b.createdAt || 0).getTime();
         return bTime - aTime;
     });
   }, [user, polls, searchTerm, statusFilter, classFilter]);
@@ -134,9 +137,13 @@ export default function Polls() {
     try {
       await API.polls.vote(poll.id, optionId);
       addNotification({ title: 'Vote enregistré', message: 'Merci !', type: 'success' });
-    } catch (error) {
+    } catch (error: any) {
       setPolls(originalPolls);
-      addNotification({ title: 'Erreur', message: 'Échec de la connexion.', type: 'alert' });
+      addNotification({ 
+        title: 'Erreur', 
+        message: error?.message || 'Échec de la connexion lors du vote.', 
+        type: 'alert' 
+      });
     }
   };
 
@@ -163,7 +170,7 @@ export default function Polls() {
     } catch (error: any) {
       addNotification({ 
         title: 'Erreur de création', 
-        message: error?.message || 'Une erreur est survenue.', 
+        message: error?.message || 'Une erreur est survenue lors de la création.', 
         type: 'alert' 
       });
     } finally {
@@ -175,8 +182,12 @@ export default function Polls() {
     try {
       await API.polls.toggleStatus(poll.id);
       fetchPolls();
-    } catch (error) {
-       addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
+    } catch (error: any) {
+       addNotification({ 
+         title: 'Erreur', 
+         message: error?.message || 'Action impossible sur le statut.', 
+         type: 'alert' 
+       });
     }
   };
 
@@ -185,8 +196,12 @@ export default function Polls() {
       try {
           await API.polls.delete(id);
           fetchPolls();
-      } catch(e) {
-          addNotification({ title: 'Erreur', message: 'Action échouée.', type: 'alert' });
+      } catch(error: any) {
+          addNotification({ 
+            title: 'Erreur', 
+            message: error?.message || 'Action de suppression échouée.', 
+            type: 'alert' 
+          });
       }
   };
 

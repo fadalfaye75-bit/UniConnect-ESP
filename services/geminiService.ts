@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { API } from "./api";
 
@@ -46,10 +45,17 @@ export async function* generateAIResponseStream(prompt: string, context: string)
 
     for await (const chunk of responseStream) {
       const part = chunk as GenerateContentResponse;
-      yield part.text || "";
+      // S'assurer de toujours renvoyer une chaîne de caractères
+      const text = part.text;
+      if (typeof text === 'string') {
+        yield text;
+      } else if (text !== undefined) {
+        yield String(text);
+      }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    yield "Désolé, une erreur technique est survenue avec l'IA.";
+    const errorMessage = error?.message || "Désolé, une erreur technique est survenue avec l'IA.";
+    yield typeof errorMessage === 'string' ? errorMessage : "Erreur inconnue de l'IA.";
   }
 }

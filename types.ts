@@ -88,6 +88,7 @@ export interface Poll {
   hasVoted: boolean; 
   userVoteOptionId?: string; // New field to track which option the user picked
   totalVotes: number;
+  createdAt: string; // ISO String
 }
 
 export interface ClassGroup {

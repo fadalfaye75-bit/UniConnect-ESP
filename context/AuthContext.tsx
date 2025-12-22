@@ -46,7 +46,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Listen for auth changes (native Supabase session management)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      // Fix: Removed 'USER_DELETED' as it's not a valid type in the current Supabase AuthChangeEvent union
+      if (event === 'SIGNED_OUT') {
         setUser(null);
         setAdminViewClass(null);
       } else if (session?.user) {
