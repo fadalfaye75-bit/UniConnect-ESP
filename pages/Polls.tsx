@@ -58,11 +58,25 @@ export default function Polls() {
   const displayedPolls = useMemo(() => {
     const now = new Date();
     return polls.filter(poll => {
+      // VISIBILITY LOGIC REINFORCEMENT
+      // Règle : Les étudiants ne voient QUE leur classe ou le flux Général.
+      // Les admins voient tout. Les délégués voient leur classe, général, ou tout si adminViewClass est actif.
       const target = (poll.className || 'Général').toLowerCase().trim();
       const userClass = (user?.className || '').toLowerCase().trim();
-      const isVisible = user?.role === UserRole.ADMIN ? true : (target === userClass || target === 'général');
       
+      let isVisible = false;
+      if (user?.role === UserRole.ADMIN) {
+        isVisible = true;
+      } else if (target === 'général' || target === 'general' || target === '') {
+        isVisible = true;
+      } else if (target === userClass) {
+        isVisible = true;
+      } else if (user?.role === UserRole.DELEGATE && target === userClass) {
+        isVisible = true;
+      }
+
       if (!isVisible) return false;
+      
       const pollStart = poll.startTime ? new Date(poll.startTime) : null;
       const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
       const isActuallyActive = poll.isActive && (!pollStart || now >= pollStart) && (!pollEnd || now <= pollEnd);

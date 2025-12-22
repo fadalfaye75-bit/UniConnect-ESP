@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Megaphone, Calendar, GraduationCap, Video, 
   BarChart2, Search, LogOut, Menu, X, Moon, Sun, 
-  ShieldCheck, UserCircle, Bell, Check, Trash2, Info, AlertTriangle, Settings, Loader2, ArrowRight, Filter, CalendarDays, Clock, CheckCircle2, MessageSquare, School
+  ShieldCheck, UserCircle, Bell, Check, Trash2, Info, AlertTriangle, Settings, Loader2, ArrowRight, Filter, CalendarDays, Clock, CheckCircle2, MessageSquare, School, FileText, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -36,10 +36,19 @@ export default function Layout() {
   
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isNotifOpen, setNotifOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{
+    announcements: any[],
+    exams: any[],
+    schedules: any[]
+  }>({ announcements: [], exams: [], schedules: [] });
+  const [isSearching, setIsSearching] = useState(false);
   
   const location = useLocation();
   const navigate = useNavigate();
   const notifRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const themeColor = user?.themeColor || '#0ea5e9';
 
@@ -47,6 +56,9 @@ export default function Layout() {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setNotifOpen(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -56,7 +68,54 @@ export default function Layout() {
   useEffect(() => {
     setSidebarOpen(false);
     setNotifOpen(false);
+    setIsSearchOpen(false);
   }, [location]);
+
+  // Global Search Logic
+  useEffect(() => {
+    const performSearch = async () => {
+      if (searchQuery.length < 2) {
+        setSearchResults({ announcements: [], exams: [], schedules: [] });
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const [allAnns, allExams, allSchs] = await Promise.all([
+          API.announcements.list(0, 50),
+          API.exams.list(),
+          API.schedules.list()
+        ]);
+
+        const query = searchQuery.toLowerCase();
+        
+        const filteredAnns = allAnns.filter(a => 
+          a.title.toLowerCase().includes(query) || a.content.toLowerCase().includes(query)
+        ).slice(0, 3);
+
+        const filteredExams = allExams.filter(e => 
+          e.subject.toLowerCase().includes(query) || e.room.toLowerCase().includes(query)
+        ).slice(0, 3);
+
+        const filteredSchs = allSchs.filter(s => 
+          s.category.toLowerCase().includes(query) || s.version.toLowerCase().includes(query)
+        ).slice(0, 3);
+
+        setSearchResults({
+          announcements: filteredAnns,
+          exams: filteredExams,
+          schedules: filteredSchs
+        });
+      } catch (e) {
+        console.error("Search failed", e);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const timer = setTimeout(performSearch, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const navItems = useMemo(() => {
     const items = [
@@ -88,6 +147,10 @@ export default function Layout() {
     }
   };
 
+  const hasAnyResult = searchResults.announcements.length > 0 || 
+                      searchResults.exams.length > 0 || 
+                      searchResults.schedules.length > 0;
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 transition-colors font-sans overflow-hidden">
       {isSidebarOpen && (
@@ -96,7 +159,6 @@ export default function Layout() {
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 transform transition-transform duration-300 ease-in-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl md:shadow-none flex flex-col`}>
         <div className="p-8 h-24 flex-shrink-0 flex items-center gap-4">
-          {/* Fix: removed invalid 'shadowColor' property and replaced with 'boxShadow' */}
           <div 
             className="w-12 h-12 flex items-center justify-center text-white rounded-2xl shadow-lg"
             style={{ backgroundColor: themeColor, boxShadow: `0 10px 15px -3px ${themeColor}33` }}
@@ -161,13 +223,109 @@ export default function Layout() {
 
       <div className="flex-1 md:ml-72 flex flex-col h-screen overflow-hidden">
         <header className="h-24 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-8 z-20 sticky top-0">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6 flex-1 max-w-2xl">
             <button onClick={() => setSidebarOpen(true)} className="md:hidden p-3 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all">
               <Menu size={24} />
             </button>
-            <div className="hidden lg:flex flex-col">
-               <h2 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter leading-none">{user?.schoolName || 'ESP DAKAR'}</h2>
-               <p className="text-[10px] font-black uppercase tracking-[0.2em] mt-1" style={{ color: themeColor }}>{user?.className || 'PORTAIL CENTRALISÉ'}</p>
+            
+            {/* Barre de Recherche Globale */}
+            <div className="relative flex-1 group hidden sm:block" ref={searchRef}>
+              <div className="relative">
+                <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${isSearchOpen ? 'text-primary-500' : 'text-gray-400'}`} size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Chercher partout..." 
+                  value={searchQuery}
+                  onFocus={() => setIsSearchOpen(true)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-14 pr-12 py-3.5 bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl text-sm font-bold italic outline-none focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 transition-all"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-primary-500" size={18} />
+                )}
+              </div>
+
+              {isSearchOpen && (searchQuery.length >= 2) && (
+                <div className="absolute top-full left-0 right-0 mt-4 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar p-4 space-y-6">
+                    {!isSearching && !hasAnyResult ? (
+                      <div className="py-12 text-center opacity-30">
+                        <Search size={32} className="mx-auto mb-3" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Aucun résultat trouvé</p>
+                      </div>
+                    ) : (
+                      <>
+                        {searchResults.announcements.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                              <Megaphone size={12} /> Annonces
+                            </h4>
+                            {searchResults.announcements.map(ann => (
+                              <button 
+                                key={ann.id} 
+                                onClick={() => { setIsSearchOpen(false); navigate('/announcements'); }}
+                                className="w-full text-left p-4 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
+                              >
+                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{ann.title}</p>
+                                <p className="text-[10px] text-gray-500 line-clamp-1 mt-1">{ann.content}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {searchResults.exams.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                              <GraduationCap size={12} /> Examens
+                            </h4>
+                            {searchResults.exams.map(exam => (
+                              <button 
+                                key={exam.id} 
+                                onClick={() => { setIsSearchOpen(false); navigate('/exams'); }}
+                                className="w-full text-left p-4 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
+                              >
+                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{exam.subject}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[9px] font-bold text-gray-400">Salle {exam.room}</span>
+                                  <span className="text-[9px] font-bold text-gray-400">•</span>
+                                  <span className="text-[9px] font-bold text-gray-400">{new Date(exam.date).toLocaleDateString()}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {searchResults.schedules.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                              <FileText size={12} /> Documents
+                            </h4>
+                            {searchResults.schedules.map(sch => (
+                              <button 
+                                key={sch.id} 
+                                onClick={() => { setIsSearchOpen(false); navigate('/schedule'); }}
+                                className="w-full text-left p-4 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
+                              >
+                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{sch.category} - {sch.version}</p>
+                                <p className="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">{sch.className || 'Général'}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                          <button 
+                            onClick={() => setIsSearchOpen(false)}
+                            className="w-full py-3 text-center text-[10px] font-black uppercase text-gray-400 hover:text-gray-900 transition-colors tracking-widest"
+                          >
+                            Fermer la recherche
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
