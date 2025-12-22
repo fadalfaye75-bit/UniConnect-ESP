@@ -195,7 +195,7 @@ export const API = {
         startTime: p.start_time, 
         endTime: p.end_time, 
         createdAt: p.created_at, 
-        options: p.options || [],
+        options: (p.options || []).sort((a: any, b: any) => a.id.localeCompare(b.id)),
         hasVoted: votes?.some(v => v.poll_id === p.id) || false, 
         userVoteOptionId: votes?.find(v => v.poll_id === p.id)?.option_id,
         totalVotes: (p.options || []).reduce((acc: number, o: any) => acc + (o.votes || 0), 0)
@@ -221,6 +221,17 @@ export const API = {
       const options = poll.options.map((o: any) => ({ poll_id: data.id, label: o.label, votes: 0 }));
       const { error: optError } = await supabase.from('poll_options').insert(options);
       if (optError) handleAPIError(optError, "Échec création options");
+    },
+    update: async (id: string, updates: any) => {
+      const dbUpdates: any = {};
+      if (updates.question !== undefined) dbUpdates.question = updates.question;
+      if (updates.className !== undefined) dbUpdates.classname = updates.className;
+      if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+      if (updates.startTime !== undefined) dbUpdates.start_time = updates.startTime;
+      if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
+
+      const { error } = await supabase.from('polls').update(dbUpdates).eq('id', id);
+      if (error) handleAPIError(error, "Mise à jour du scrutin échouée");
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('polls').delete().eq('id', id);

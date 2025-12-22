@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// Added Radio to the imports from lucide-react
-import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio } from 'lucide-react';
+import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Poll, ClassGroup } from '../types';
 import Modal from '../components/Modal';
@@ -12,6 +11,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Ba
 export default function Polls() {
   const { user, adminViewClass } = useAuth();
   const { addNotification } = useNotification();
+  const themeColor = user?.themeColor || '#0ea5e9';
   
   const [polls, setPolls] = useState<Poll[]>([]);
   const [classes, setClasses] = useState<ClassGroup[]>([]);
@@ -88,7 +88,6 @@ export default function Polls() {
 
     setVotingIds(prev => new Set(prev).add(poll.id));
     
-    // Optimistic UI update
     const oldOptionId = poll.userVoteOptionId;
     setPolls(prev => prev.map(p => {
         if (p.id !== poll.id) return p;
@@ -128,6 +127,32 @@ export default function Polls() {
     setExpandedPollId(expandedPollId === pollId ? null : pollId);
   };
 
+  const handleTogglePollStatus = async (poll: Poll) => {
+    if (!canManage) return;
+    try {
+      await API.polls.update(poll.id, { isActive: !poll.isActive });
+      addNotification({ 
+        title: poll.isActive ? 'Scrutin clôturé' : 'Scrutin réouvert', 
+        message: `Le sondage est désormais ${poll.isActive ? 'fermé' : 'ouvert'}.`, 
+        type: 'success' 
+      });
+      fetchPolls(false);
+    } catch (error: any) {
+      addNotification({ title: 'Erreur', message: 'Action échouée.', type: 'alert' });
+    }
+  };
+
+  const handleDeletePoll = async (poll: Poll) => {
+    if (!canManage || !window.confirm("Supprimer ce scrutin définitivement ?")) return;
+    try {
+      await API.polls.delete(poll.id);
+      addNotification({ title: 'Supprimé', message: 'Le sondage a été retiré.', type: 'info' });
+      fetchPolls(false);
+    } catch (error: any) {
+      addNotification({ title: 'Erreur', message: 'Suppression impossible.', type: 'alert' });
+    }
+  };
+
   const handleCreatePoll = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -151,7 +176,7 @@ export default function Polls() {
 
   if (loading) return (
     <div className="flex flex-col justify-center items-center h-full gap-4">
-        <Loader2 className="animate-spin text-primary-500" size={40} />
+        <Loader2 className="animate-spin" style={{ color: themeColor }} size={40} />
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse italic">Synchronisation des scrutins...</p>
     </div>
   );
@@ -160,7 +185,10 @@ export default function Polls() {
     <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-8 sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 z-20 backdrop-blur-md">
         <div className="flex items-center gap-5">
-           <div className="w-14 h-14 bg-gradient-to-br from-violet-600 to-primary-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/20">
+           <div 
+            className="w-14 h-14 text-white rounded-2xl flex items-center justify-center shadow-lg"
+            style={{ backgroundColor: themeColor, boxShadow: `0 10px 15px -3px ${themeColor}33` }}
+           >
               <BarChart2 size={32} />
            </div>
            <div>
@@ -174,10 +202,15 @@ export default function Polls() {
         <div className="flex flex-col lg:flex-row flex-1 items-center gap-3 max-w-3xl">
            <div className="relative flex-1 w-full group">
              <Search className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={18} />
-             <input type="text" placeholder="Rechercher un scrutin..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-50 transition-all font-bold italic" />
+             {/* Fix: removed invalid 'focusRingColor' style property */}
+             <input type="text" placeholder="Rechercher un scrutin..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 transition-all font-bold italic" />
            </div>
            {canManage && (
-             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-primary-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black shadow-xl shadow-primary-500/20 active:scale-95 transition-all uppercase tracking-widest italic">
+             <button 
+                onClick={() => setIsModalOpen(true)} 
+                className="flex items-center gap-2 text-white px-8 py-3.5 rounded-2xl text-xs font-black shadow-xl active:scale-95 transition-all uppercase tracking-widest italic"
+                style={{ backgroundColor: themeColor, boxShadow: `0 10px 20px -5px ${themeColor}66` }}
+             >
                <Plus size={18} /> Nouveau Scrutin
              </button>
            )}
@@ -198,13 +231,14 @@ export default function Polls() {
                 key={poll.id} 
                 onClick={() => !isExpanded && toggleExpand(poll.id)}
                 className={`bg-white dark:bg-gray-900 rounded-[3rem] p-8 md:p-12 shadow-soft border-2 transition-all duration-500 flex flex-col relative overflow-hidden group cursor-pointer ${
-                  isExpanded ? 'border-primary-500 shadow-2xl scale-[1.01]' : 'border-transparent hover:border-gray-100 hover:shadow-xl'
+                  isExpanded ? 'shadow-2xl scale-[1.01]' : 'border-transparent hover:border-gray-100 hover:shadow-xl'
                 }`}
+                style={isExpanded ? { borderColor: themeColor } : {}}
               >
                 {/* Visual Accent */}
                 <div className={`absolute top-0 left-0 w-2 h-full ${isActuallyActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
 
-                <div className="flex justify-between items-start mb-8">
+                <div className="flex flex-wrap justify-between items-start mb-8 gap-4">
                    <div className="flex flex-wrap gap-3">
                       <div className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${isActuallyActive ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                         {isActuallyActive ? <><Radio className="animate-pulse" size={14} /> Scrutin en cours</> : <><Lock size={14} /> Consultation fermée</>}
@@ -213,16 +247,40 @@ export default function Polls() {
                         {poll.className || 'ESP DAKAR'}
                       </span>
                    </div>
-                   <button 
-                    onClick={(e) => { e.stopPropagation(); toggleExpand(poll.id); }}
-                    className={`p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-primary-500 transition-all ${isExpanded ? 'rotate-180 bg-primary-50 text-primary-500' : ''}`}
-                   >
-                     <ChevronDown size={24} />
-                   </button>
+                   
+                   <div className="flex items-center gap-2 ml-auto">
+                     {canManage && (
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 p-2 rounded-2xl border border-gray-100 dark:border-gray-700">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleTogglePollStatus(poll); }}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm ${poll.isActive ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                            >
+                                {poll.isActive ? <><Lock size={14} /> Clôturer</> : <><Unlock size={14} /> Réouvrir</>}
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeletePoll(poll); }}
+                                className="p-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all border border-transparent hover:border-red-100"
+                                title="Supprimer définitivement"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                     )}
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); toggleExpand(poll.id); }}
+                        className={`p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-400 transition-all ${isExpanded ? 'rotate-180 bg-gray-200 dark:bg-gray-700' : ''}`}
+                        style={isExpanded ? { color: themeColor } : {}}
+                     >
+                        <ChevronDown size={24} />
+                     </button>
+                   </div>
                 </div>
 
                 <div className="flex-1">
-                  <h3 className={`text-3xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tighter italic mb-10 transition-colors ${isExpanded ? 'text-primary-600' : ''}`}>
+                  <h3 
+                    className={`text-3xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tighter italic mb-10 transition-colors`}
+                    style={isExpanded ? { color: themeColor } : {}}
+                  >
                     {poll.question}
                   </h3>
 
@@ -240,25 +298,33 @@ export default function Polls() {
                             disabled={!canVote} 
                             className={`relative w-full text-left rounded-[2rem] overflow-hidden transition-all h-24 flex items-center px-10 border-2 ${
                                 isSelected 
-                                ? 'border-primary-500 bg-primary-50/20 shadow-lg' 
+                                ? 'bg-gray-50/20 shadow-lg' 
                                 : 'border-gray-50 dark:border-gray-800 bg-white dark:bg-gray-900'
-                            } ${!canVote ? 'cursor-default' : 'hover:border-primary-300 hover:translate-x-1 active:scale-95'}`}
+                            } ${!canVote ? 'cursor-default' : 'hover:translate-x-1 active:scale-95'}`}
+                            style={isSelected ? { borderColor: themeColor } : {}}
                           >
                              {/* Progress Bar with Gradient */}
                              <div 
-                                className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-out opacity-20 ${
-                                    isSelected ? 'bg-gradient-to-r from-primary-600 to-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                                }`} 
-                                style={{ width: `${percentage}%` }} 
+                                className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-out opacity-20`} 
+                                style={{ 
+                                    width: `${percentage}%`,
+                                    backgroundColor: isSelected ? themeColor : '#94a3b8'
+                                }} 
                              />
                              
                              <div className="flex-1 flex items-center justify-between z-10 relative">
                                   <div className="flex items-center gap-6 min-w-0">
-                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-primary-500 border-primary-500 text-white scale-125' : 'border-gray-200'}`}>
+                                    <div 
+                                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'text-white scale-125' : 'border-gray-200'}`}
+                                        style={isSelected ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+                                    >
                                        {isSelected ? <Check size={16} strokeWidth={4} /> : null}
                                     </div>
                                     <div className="min-w-0">
-                                      <p className={`text-lg font-black italic truncate ${isSelected ? 'text-primary-600' : 'text-gray-800 dark:text-gray-200'}`}>
+                                      <p 
+                                        className={`text-lg font-black italic truncate ${isSelected ? '' : 'text-gray-800 dark:text-gray-200'}`}
+                                        style={isSelected ? { color: themeColor } : {}}
+                                      >
                                         {option.label}
                                       </p>
                                       {isLeader && isExpanded && (
@@ -270,7 +336,10 @@ export default function Polls() {
                                   </div>
 
                                   <div className="flex flex-col items-end shrink-0 ml-4">
-                                    <span className={`text-3xl font-black italic tracking-tighter ${isSelected ? 'text-primary-600' : 'text-gray-900 dark:text-white'}`}>
+                                    <span 
+                                        className={`text-3xl font-black italic tracking-tighter ${isSelected ? '' : 'text-gray-900 dark:text-white'}`}
+                                        style={isSelected ? { color: themeColor } : {}}
+                                    >
                                       {percentage}%
                                     </span>
                                     <div className="flex items-center gap-2">
@@ -285,13 +354,12 @@ export default function Polls() {
                   </div>
                 </div>
 
-                {/* Expanded Section with More Charts */}
                 {isExpanded && (
                   <div className="mt-12 pt-12 border-t-2 border-dashed border-gray-100 dark:border-gray-800 space-y-10 animate-in slide-in-from-top-4 duration-500">
                     <div className="grid md:grid-cols-2 gap-10">
                       <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700">
                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                          <TrendingUp size={14} className="text-primary-500" /> Répartition Analytique
+                          <TrendingUp size={14} style={{ color: themeColor }} /> Répartition Analytique
                         </h4>
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
@@ -303,7 +371,7 @@ export default function Polls() {
                               />
                               <Bar dataKey="votes" radius={[0, 10, 10, 0]}>
                                 {poll.options.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.id === poll.userVoteOptionId ? '#0ea5e9' : '#e2e8f0'} />
+                                  <Cell key={`cell-${index}`} fill={entry.id === poll.userVoteOptionId ? themeColor : '#e2e8f0'} />
                                 ))}
                               </Bar>
                             </BarChart>
@@ -312,7 +380,10 @@ export default function Polls() {
                       </div>
 
                       <div className="flex flex-col justify-center space-y-6">
-                        <div className="p-8 bg-primary-500 text-white rounded-[2.5rem] shadow-xl shadow-primary-500/20 relative overflow-hidden">
+                        <div 
+                            className="p-8 text-white rounded-[2.5rem] shadow-xl relative overflow-hidden"
+                            style={{ backgroundColor: themeColor, boxShadow: `0 20px 25px -5px ${themeColor}33` }}
+                        >
                            <Users className="absolute -bottom-6 -right-6 w-32 h-32 opacity-10" />
                            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Participation Totale</p>
                            <h4 className="text-5xl font-black italic tracking-tighter mt-2">{poll.totalVotes}</h4>
@@ -328,7 +399,7 @@ export default function Polls() {
                           </div>
                           <div className="p-6 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700">
                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Type</span>
-                            <p className="text-sm font-black italic mt-1 text-primary-500 uppercase">ANONYME</p>
+                            <p className="text-sm font-black italic mt-1 uppercase" style={{ color: themeColor }}>ANONYME</p>
                           </div>
                         </div>
                       </div>
@@ -345,14 +416,13 @@ export default function Polls() {
                   </div>
                 )}
 
-                {/* Footer simple (si non étendu) */}
                 {!isExpanded && (
                   <div className="mt-8 pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between opacity-60">
                      <div className="flex items-center gap-3">
                         <Users size={16} className="text-gray-400" />
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">{poll.totalVotes} PARTICIPANTS</span>
                      </div>
-                     <span className="text-[9px] font-black text-primary-500 uppercase tracking-[0.2em] italic group-hover:translate-x-2 transition-transform">Cliquez pour analyser <ChevronDown className="-rotate-90 inline ml-1" size={12}/></span>
+                     <span className="text-[9px] font-black uppercase tracking-[0.2em] italic group-hover:translate-x-2 transition-transform" style={{ color: themeColor }}>Cliquez pour analyser <ChevronDown className="-rotate-90 inline ml-1" size={12}/></span>
                   </div>
                 )}
               </div>
@@ -364,7 +434,8 @@ export default function Polls() {
         <form onSubmit={handleCreatePoll} className="space-y-6">
           <div>
             <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Question de la consultation</label>
-            <textarea required rows={3} value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-5 py-4 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none focus:ring-4 focus:ring-primary-50 transition-all italic text-lg" placeholder="Quelle est votre opinion sur..." />
+            {/* Fix: removed invalid 'focusRingColor' style property */}
+            <textarea required rows={3} value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-5 py-4 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none focus:ring-4 transition-all italic text-lg" placeholder="Quelle est votre opinion sur..." />
           </div>
           <div className="space-y-3">
              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Options de réponse</label>
@@ -380,7 +451,12 @@ export default function Polls() {
                     )}
                 </div>
              ))}
-             <button type="button" onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} className="text-[10px] font-black text-primary-500 uppercase flex items-center gap-2 py-3 px-4 bg-primary-50 rounded-xl w-full justify-center border border-dashed border-primary-200 hover:bg-primary-100 transition-all">
+             <button 
+                type="button" 
+                onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} 
+                className="text-[10px] font-black uppercase flex items-center gap-2 py-3 px-4 rounded-xl w-full justify-center border border-dashed hover:bg-opacity-20 transition-all"
+                style={{ color: themeColor, borderColor: themeColor, backgroundColor: `${themeColor}11` }}
+             >
                 <Plus size={16} /> Ajouter un choix
              </button>
           </div>
@@ -399,7 +475,12 @@ export default function Polls() {
              </div>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-3 uppercase tracking-widest active:scale-95 italic">
+          <button 
+            type="submit" 
+            disabled={submitting} 
+            className="w-full text-white font-black py-5 rounded-2xl shadow-xl transition-all flex justify-center items-center gap-3 uppercase tracking-widest active:scale-95 italic"
+            style={{ backgroundColor: themeColor, boxShadow: `0 15px 25px -5px ${themeColor}55` }}
+          >
             {submitting ? <Loader2 className="animate-spin" /> : <Vote size={24} />}
             {submitting ? 'Publication...' : 'Ouvrir le scrutin'}
           </button>

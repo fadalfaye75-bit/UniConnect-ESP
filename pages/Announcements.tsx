@@ -52,7 +52,6 @@ export default function Announcements() {
     fetchAnnouncements(true);
     API.classes.list().then(setClasses);
     const subscription = API.announcements.subscribe(() => fetchAnnouncements(false));
-    // Fixed: Explicitly return void from destructor to avoid Promise return type error
     return () => {
       subscription.unsubscribe();
     };
@@ -161,12 +160,17 @@ export default function Announcements() {
           return (
             <div 
               key={ann.id} 
-              className={`group relative bg-white dark:bg-gray-900 rounded-[3rem] p-10 border-l-[8px] shadow-soft transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 flex flex-col md:flex-row gap-10 ${
+              className={`group relative bg-white dark:bg-gray-900 rounded-[3rem] p-10 border-l-[8px] shadow-soft transition-all duration-500 hover:shadow-premium hover:-translate-y-2 hover:scale-[1.01] flex flex-col md:flex-row gap-10 ${
                 isUrgent ? 'border-rose-500 bg-gradient-to-br from-white to-rose-50/30' : 
                 isImportant ? 'border-amber-500 bg-gradient-to-br from-white to-amber-50/10' : 'border-blue-500'
               }`}
             >
-              <div className="flex flex-col items-center justify-center w-24 h-24 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-lg group-hover:rotate-3 transition-transform shrink-0">
+              {/* Animation focus visual bar */}
+              <div className={`absolute top-0 left-0 w-2 h-0 group-hover:h-full transition-all duration-500 ${
+                  isUrgent ? 'bg-rose-600' : isImportant ? 'bg-amber-600' : 'bg-blue-600'
+              }`}></div>
+
+              <div className="flex flex-col items-center justify-center w-24 h-24 bg-white dark:bg-gray-800 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-lg group-hover:rotate-3 group-hover:shadow-xl transition-all duration-500 shrink-0">
                   <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isUrgent ? 'text-rose-500' : 'text-gray-400'}`}>{new Date(ann.date).toLocaleDateString('fr-FR', {month: 'short'})}</span>
                   <span className="text-4xl font-black text-gray-900 dark:text-white leading-none tracking-tighter">{new Date(ann.date).getDate()}</span>
               </div>
@@ -174,7 +178,7 @@ export default function Announcements() {
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border tracking-[0.2em] ${
+                    <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border tracking-[0.2em] transition-all duration-300 group-hover:scale-105 ${
                       isUrgent ? 'bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/20' : 
                       isImportant ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-primary-50 text-primary-600 border-primary-100'
                     }`}>
@@ -185,31 +189,31 @@ export default function Announcements() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                    <button onClick={(e) => handleCopy(e, ann)} className={`p-3 rounded-2xl transition-all ${copiedId === ann.id ? 'bg-green-500 text-white' : 'bg-gray-50 text-gray-400 hover:text-primary-500'}`}>
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                    <button onClick={(e) => handleCopy(e, ann)} className={`p-3 rounded-2xl transition-all ${copiedId === ann.id ? 'bg-green-500 text-white' : 'bg-gray-50 text-gray-400 hover:text-primary-500 hover:bg-white hover:shadow-md'}`}>
                       {copiedId === ann.id ? <Check size={18} /> : <Copy size={18} />}
                     </button>
                     {canModify && (
-                      <button onClick={(e) => { e.stopPropagation(); setEditingId(ann.id); setNewAnn(ann as any); setIsModalOpen(true); }} className="p-3 bg-gray-50 text-gray-400 hover:text-blue-500 rounded-2xl transition-all"><Pencil size={18} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingId(ann.id); setNewAnn(ann as any); setIsModalOpen(true); }} className="p-3 bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-white hover:shadow-md rounded-2xl transition-all"><Pencil size={18} /></button>
                     )}
                   </div>
                 </div>
 
-                <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-4 italic tracking-tighter leading-tight group-hover:text-primary-600 transition-colors">
+                <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-4 italic tracking-tighter leading-tight group-hover:text-primary-600 transition-colors duration-300">
                   {ann.title}
                 </h3>
                 <p className="text-base text-gray-600 dark:text-gray-400 leading-relaxed italic opacity-90 mb-8 whitespace-pre-wrap">{ann.content}</p>
 
                 <div className="pt-8 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 text-primary-600 rounded-xl flex items-center justify-center font-black text-sm">{ann.author.charAt(0)}</div>
+                   <div className="flex items-center gap-3 group/author">
+                      <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 text-primary-600 rounded-xl flex items-center justify-center font-black text-sm transition-transform group-hover/author:scale-110">{ann.author.charAt(0)}</div>
                       <div className="min-w-0">
                          <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest italic leading-none">{ann.author}</p>
                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-1">{user?.schoolName || 'ESP DAKAR'}</p>
                       </div>
                    </div>
-                   <button onClick={(e) => { e.stopPropagation(); addNotification({ title: 'Partagé', message: 'L\'avis a été partagé.', type: 'info' }); }} className="flex items-center gap-3 px-6 py-3 bg-gray-900 text-white dark:bg-gray-800 dark:text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">
-                      Relayer <Share2 size={14} />
+                   <button onClick={(e) => { e.stopPropagation(); addNotification({ title: 'Partagé', message: 'L\'avis a été partagé.', type: 'info' }); }} className="flex items-center gap-3 px-6 py-3 bg-gray-900 text-white dark:bg-gray-800 dark:text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl hover:shadow-primary-500/20">
+                      Relayer <Share2 size={14} className="group-hover:rotate-12 transition-transform" />
                    </button>
                 </div>
               </div>
