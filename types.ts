@@ -1,3 +1,4 @@
+
 export enum UserRole {
   STUDENT = 'STUDENT',
   DELEGATE = 'DELEGATE',
@@ -45,12 +46,15 @@ export interface Exam {
   links?: ExternalLink[];
 }
 
+export type ScheduleCategory = 'Planning' | 'Examens' | 'Cours' | 'Autre';
+
 export interface ScheduleFile {
   id: string;
   version: string;
   uploadDate: string;
   url: string;
   className: string;
+  category: ScheduleCategory;
 }
 
 export interface MeetLink {

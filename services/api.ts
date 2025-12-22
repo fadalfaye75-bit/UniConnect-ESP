@@ -1,37 +1,20 @@
 
 // Complete implementation of the API service using Supabase client.
 import { supabase } from './supabaseClient';
-import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole } from '../types';
+import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole, ScheduleFile } from '../types';
 
 const handleAPIError = (error: any, fallback: string) => {
   if (!error) return;
-  // Ne pas considérer "0 rows" comme une erreur fatale dans certains cas
   if (error.code === 'PGRST116') return;
-  
-  console.error("API Error Detailed:", error);
+  console.error(`[UniConnect API Error] ${fallback}:`, JSON.stringify(error, null, 2));
   
   let message = fallback;
-  
-  if (typeof error === 'string') {
-    message = error;
-  } else if (error && typeof error === 'object') {
-    if (error.message) {
-      message = error.message;
-    } else if (error.error_description) {
-      message = error.error_description;
-    } else if (error.details) {
-      message = error.details;
-    } else if (error.hint) {
-      message = `${fallback} : ${error.hint}`;
-    } else {
-      try {
-        message = JSON.stringify(error);
-      } catch (e) {
-        message = fallback;
-      }
-    }
+  if (typeof error === 'string') message = error;
+  else if (error && typeof error === 'object') {
+    if (error.message) message = error.message;
+    else if (error.error_description) message = error.error_description;
+    else if (error.code) message = `${fallback} (Erreur ${error.code})`;
   }
-
   throw new Error(message);
 };
 
@@ -62,10 +45,8 @@ export const API = {
     login: async (email: string, pass: string): Promise<User> => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
       if (error) handleAPIError(error, "Erreur d'authentification");
-      
       const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
       if (pError || !profile) throw new Error("Profil utilisateur introuvable.");
-      
       return mapProfile(profile);
     },
     updateProfile: async (id: string, updates: Partial<User>): Promise<User> => {
@@ -76,7 +57,6 @@ export const API = {
       if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
       if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
-
       const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', id).select().maybeSingle();
       if (error || !data) handleAPIError(error, "Mise à jour échouée");
       return mapProfile(data);
@@ -87,38 +67,31 @@ export const API = {
       return (data || []).map(mapProfile);
     },
     createUser: async (userData: { name: string, email: string, role: UserRole, className: string, schoolName?: string }) => {
+      // NOTE: Le trigger SQL handle_new_user s'occupe de créer le profil automatiquement.
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
-        password: 'passer25',
-        options: {
-          data: {
-            name: userData.name,
-            role: userData.role,
-            className: userData.className,
-            school_name: userData.schoolName || 'ESP Dakar'
-          }
+        password: 'passer25', // Mot de passe par défaut pour tous les nouveaux comptes universitaires
+        options: { 
+          data: { 
+            name: userData.name, 
+            role: userData.role, 
+            className: userData.className, 
+            school_name: userData.schoolName || 'ESP Dakar' 
+          } 
         }
       });
-      
       if (error) handleAPIError(error, "Création du compte impossible");
       if (!data.user) throw new Error("Utilisateur non créé.");
-
-      const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
-      if (pError || !profile) {
-        const { data: manual, error: mError } = await supabase.from('profiles').insert({
-          id: data.user.id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role,
-          classname: userData.className,
-          school_name: userData.schoolName || 'ESP Dakar',
-          is_active: true,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`
-        }).select().maybeSingle();
-        if (mError || !manual) handleAPIError(mError, "Erreur lors de la création du profil");
-        return mapProfile(manual);
-      }
-      return mapProfile(profile);
+      
+      // On retourne le profil tel qu'il devrait être (le trigger SQL fera le reste en DB)
+      return {
+        id: data.user.id,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        className: userData.className,
+        isActive: true
+      } as User;
     },
     toggleUserStatus: async (userId: string) => {
       const { data: profile } = await supabase.from('profiles').select('is_active').eq('id', userId).maybeSingle();
@@ -136,105 +109,58 @@ export const API = {
   },
   announcements: {
     list: async (page: number, size: number): Promise<Announcement[]> => {
-      const { data, error } = await supabase.from('announcements')
-        .select('*')
-        .order('date', { ascending: false })
-        .range(page * size, (page + 1) * size - 1);
-      if (error) handleAPIError(error, "Chargement des annonces impossible");
-      return (data || []).map(a => ({
-        ...a,
-        className: a.classname,
-        links: a.links || [],
-        attachments: a.attachments || []
-      }));
+      const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false }).range(page * size, (page + 1) * size - 1);
+      if (error) handleAPIError(error, "Chargement impossible");
+      return (data || []).map(a => ({ ...a, className: a.classname }));
     },
     create: async (ann: any) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user?.id).maybeSingle();
-      
-      const { error } = await supabase.from('announcements').insert({
-        title: ann.title,
-        content: ann.content,
-        priority: ann.priority,
-        classname: ann.className,
-        author: profile?.name || 'Admin',
-        links: ann.links || [],
-        attachments: ann.attachments || [],
-        date: new Date().toISOString()
-      });
+      const profile = await API.auth.getSession();
+      const { error } = await supabase.from('announcements').insert({ title: ann.title, content: ann.content, priority: ann.priority, classname: ann.className, author: profile?.name || 'Admin', links: ann.links || [], attachments: ann.attachments || [], date: new Date().toISOString() });
       if (error) handleAPIError(error, "Publication impossible");
+    },
+    update: async (id: string, ann: any) => {
+      const { error } = await supabase.from('announcements').update({ title: ann.title, content: ann.content, priority: ann.priority, classname: ann.className, links: ann.links || [], attachments: ann.attachments || [] }).eq('id', id);
+      if (error) handleAPIError(error, "Mise à jour impossible");
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('announcements').delete().eq('id', id);
       if (error) handleAPIError(error, "Suppression impossible");
     },
     subscribe: (callback: () => void) => {
-      return supabase.channel('announcements_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, callback)
-        .subscribe();
+      return supabase.channel('ann_changes').on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, callback).subscribe();
     }
   },
   exams: {
     list: async (): Promise<Exam[]> => {
       const { data, error } = await supabase.from('exams').select('*').order('date', { ascending: true });
-      if (error) handleAPIError(error, "Chargement des examens impossible");
-      return (data || []).map(e => ({
-        ...e,
-        className: e.classname
-      }));
+      if (error) handleAPIError(error, "Chargement impossible");
+      return (data || []).map(e => ({ ...e, className: e.classname }));
     },
     create: async (exam: any) => {
-      const { error } = await supabase.from('exams').insert({
-        subject: exam.subject,
-        date: exam.date,
-        duration: exam.duration,
-        room: exam.room,
-        notes: exam.notes,
-        classname: exam.className
-      });
-      if (error) handleAPIError(error, "Ajout de l'examen impossible");
+      const { error } = await supabase.from('exams').insert({ subject: exam.subject, date: exam.date, duration: exam.duration, room: exam.room, notes: exam.notes, classname: exam.className });
+      if (error) handleAPIError(error, "Ajout impossible");
     },
     update: async (id: string, exam: any) => {
-      const { error } = await supabase.from('exams').update({
-        subject: exam.subject,
-        date: exam.date,
-        duration: exam.duration,
-        room: exam.room,
-        notes: exam.notes
-      }).eq('id', id);
-      if (error) handleAPIError(error, "Mise à jour de l'examen impossible");
+      const { error } = await supabase.from('exams').update({ subject: exam.subject, date: exam.date, duration: exam.duration, room: exam.room, notes: exam.notes }).eq('id', id);
+      if (error) handleAPIError(error, "Mise à jour impossible");
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('exams').delete().eq('id', id);
-      if (error) handleAPIError(error, "Suppression de l'examen impossible");
+      if (error) handleAPIError(error, "Suppression impossible");
     }
   },
   meet: {
     list: async (): Promise<MeetLink[]> => {
       const { data, error } = await supabase.from('meet_links').select('*');
-      if (error) handleAPIError(error, "Chargement des liens impossible");
-      return (data || []).map(m => ({
-        ...m,
-        className: m.classname
-      }));
+      if (error) handleAPIError(error, "Chargement impossible");
+      return (data || []).map(m => ({ ...m, className: m.classname }));
     },
     create: async (meet: any) => {
-      const { error } = await supabase.from('meet_links').insert({
-        title: meet.title,
-        platform: meet.platform,
-        url: meet.url,
-        time: meet.time,
-        classname: meet.className
-      });
+      const { error } = await supabase.from('meet_links').insert({ title: meet.title, platform: meet.platform, url: meet.url, time: meet.time, classname: meet.className });
       if (error) handleAPIError(error, "Ajout impossible");
     },
     update: async (id: string, meet: any) => {
-      const { error } = await supabase.from('meet_links').update({
-        title: meet.title,
-        platform: meet.platform,
-        url: meet.url,
-        time: meet.time
-      }).eq('id', id);
+      const { error } = await supabase.from('meet_links').update({ title: meet.title, platform: meet.platform, url: meet.url, time: meet.time }).eq('id', id);
       if (error) handleAPIError(error, "Mise à jour impossible");
     },
     delete: async (id: string) => {
@@ -244,85 +170,48 @@ export const API = {
   },
   polls: {
     list: async (): Promise<Poll[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       const { data: polls, error } = await supabase.from('polls').select('*, options:poll_options(*)').order('created_at', { ascending: false });
-      if (error) handleAPIError(error, "Chargement des sondages impossible");
-      
+      if (error) handleAPIError(error, "Chargement impossible");
       const { data: votes } = user ? await supabase.from('poll_votes').select('*').eq('user_id', user.id) : { data: [] };
-      
       return (polls || []).map(p => ({
-        id: p.id,
-        question: p.question,
-        className: p.classname,
-        isActive: p.is_active,
-        startTime: p.start_time,
-        endTime: p.end_time,
-        createdAt: p.created_at,
-        options: p.options || [],
-        hasVoted: votes?.some(v => v.poll_id === p.id) || false,
-        userVoteOptionId: votes?.find(v => v.poll_id === p.id)?.option_id,
+        id: p.id, question: p.question, className: p.classname, isActive: p.is_active, startTime: p.start_time, endTime: p.end_time, createdAt: p.created_at, options: p.options || [],
+        hasVoted: votes?.some(v => v.poll_id === p.id) || false, userVoteOptionId: votes?.find(v => v.poll_id === p.id)?.option_id,
         totalVotes: (p.options || []).reduce((acc: number, o: any) => acc + (o.votes || 0), 0)
       })) as Poll[];
     },
     vote: async (pollId: string, optionId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Veuillez vous connecter pour voter.");
-      
-      const { error } = await supabase.from('poll_votes').upsert({ 
-        poll_id: pollId, 
-        user_id: user.id, 
-        option_id: optionId 
-      }, { 
-        onConflict: 'poll_id,user_id' 
-      });
-      
-      if (error) handleAPIError(error, "Enregistrement du vote impossible");
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) throw new Error("Veuillez vous connecter.");
+      const { error } = await supabase.from('poll_votes').upsert({ poll_id: pollId, user_id: user.id, option_id: optionId }, { onConflict: 'poll_id,user_id' });
+      if (error) handleAPIError(error, "Vote impossible");
     },
     create: async (poll: any) => {
-      const { data, error } = await supabase.from('polls').insert({
-        question: poll.question,
-        classname: poll.className,
-        start_time: poll.startTime || null,
-        end_time: poll.endTime || null,
-        is_active: true
-      }).select().maybeSingle();
-      if (error || !data) handleAPIError(error, "Création du sondage impossible");
-      
+      const { data, error } = await supabase.from('polls').insert({ question: poll.question, classname: poll.className, start_time: poll.startTime || null, end_time: poll.endTime || null, is_active: true }).select().maybeSingle();
+      if (error || !data) handleAPIError(error, "Sondage impossible");
       const options = poll.options.map((o: any) => ({ poll_id: data.id, label: o.label, votes: 0 }));
       const { error: optError } = await supabase.from('poll_options').insert(options);
-      if (optError) handleAPIError(optError, "Création des options impossible");
-    },
-    toggleStatus: async (id: string) => {
-      const { data: poll } = await supabase.from('polls').select('is_active').eq('id', id).maybeSingle();
-      const { error } = await supabase.from('polls').update({ is_active: !poll?.is_active }).eq('id', id);
-      if (error) handleAPIError(error, "Changement de statut impossible");
+      if (optError) handleAPIError(optError, "Options impossibles");
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('polls').delete().eq('id', id);
       if (error) handleAPIError(error, "Suppression impossible");
     },
     subscribe: (callback: () => void) => {
-      return supabase.channel('polls_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, callback)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_options' }, callback)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, callback)
-        .subscribe();
+      return supabase.channel('polls_chan').on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, callback).on('postgres_changes', { event: '*', schema: 'public', table: 'poll_options' }, callback).on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, callback).subscribe();
     }
   },
   classes: {
     list: async (): Promise<ClassGroup[]> => {
       const { data, error } = await supabase.from('classes').select('*');
-      if (error) handleAPIError(error, "Chargement des classes impossible");
-      return (data || []).map(c => ({
-        id: c.id,
-        name: c.name,
-        email: c.email,
-        studentCount: c.student_count
-      }));
+      if (error) handleAPIError(error, "Chargement impossible");
+      return (data || []).map(c => ({ id: c.id, name: c.name, email: c.email, studentCount: c.student_count }));
     },
     create: async (name: string, email: string) => {
       const { error } = await supabase.from('classes').insert({ name, email });
-      if (error) handleAPIError(error, "Création de la classe impossible");
+      if (error) handleAPIError(error, "Création impossible");
     },
     update: async (id: string, updates: any) => {
       const { error } = await supabase.from('classes').update(updates).eq('id', id);
@@ -334,24 +223,13 @@ export const API = {
     }
   },
   schedules: {
-    list: async (): Promise<any[]> => {
+    list: async (): Promise<ScheduleFile[]> => {
       const { data, error } = await supabase.from('schedules').select('*').order('upload_date', { ascending: false });
       if (error) handleAPIError(error, "Chargement impossible");
-      return (data || []).map(s => ({
-        id: s.id,
-        version: s.version,
-        url: s.url,
-        className: s.classname,
-        uploadDate: s.upload_date
-      }));
+      return (data || []).map(s => ({ id: s.id, version: s.version, url: s.url, className: s.classname, uploadDate: s.upload_date, category: s.category || 'Planning' }));
     },
     create: async (sch: any) => {
-      const { error } = await supabase.from('schedules').insert({
-        version: sch.version,
-        url: sch.url,
-        classname: sch.className,
-        upload_date: new Date().toISOString()
-      });
+      const { error } = await supabase.from('schedules').insert({ version: sch.version, url: sch.url, classname: sch.className, category: sch.category, upload_date: new Date().toISOString() });
       if (error) handleAPIError(error, "Publication impossible");
     },
     delete: async (id: string) => {
@@ -361,84 +239,49 @@ export const API = {
   },
   notifications: {
     list: async (): Promise<AppNotification[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       const profile = await API.auth.getSession();
-      
-      const { data, error } = await supabase.from('notifications')
-        .select('*')
-        .or(`target_user_id.eq.${user?.id},target_role.eq.${profile?.role},target_class.eq.${profile?.className}`)
-        .order('timestamp', { ascending: false });
-      
-      if (error) handleAPIError(error, "Chargement des notifications impossible");
-      return (data || []).map(n => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        timestamp: n.timestamp,
-        isRead: n.is_read
-      })) as AppNotification[];
+      const { data, error } = await supabase.from('notifications').select('*').or(`target_user_id.eq.${user?.id},target_role.eq.${profile?.role},target_class.eq.${profile?.className}`).order('timestamp', { ascending: false });
+      if (error) handleAPIError(error, "Chargement impossible");
+      return (data || []).map(n => ({ id: n.id, title: n.title, message: n.message, type: n.type, timestamp: n.timestamp, isRead: n.is_read }));
     },
     add: async (notif: any) => {
-      const { error } = await supabase.from('notifications').insert({
-        title: notif.title,
-        message: notif.message,
-        type: notif.type,
-        target_user_id: notif.target_user_id,
-        target_role: notif.target_role,
-        target_class: notif.target_class,
-        timestamp: new Date().toISOString(),
-        is_read: false
-      });
-      if (error) handleAPIError(error, "Ajout de notification impossible");
+      const { error } = await supabase.from('notifications').insert({ ...notif, timestamp: new Date().toISOString(), is_read: false });
+      if (error) handleAPIError(error, "Ajout impossible");
     },
     markRead: async (id: string) => {
       const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
       if (error) handleAPIError(error, "Action impossible");
     },
     markAllRead: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('target_user_id', user?.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) return;
+      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('target_user_id', user.id);
       if (error) handleAPIError(error, "Action impossible");
     },
     clear: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('notifications').delete().eq('target_user_id', user?.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) return;
+      const { error } = await supabase.from('notifications').delete().eq('target_user_id', user.id);
       if (error) handleAPIError(error, "Action impossible");
     },
     subscribe: (userId: string, callback: () => void) => {
-      return supabase.channel(`notifications_${userId}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, callback)
-        .subscribe();
+      return supabase.channel(`notifs_${userId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, callback).subscribe();
     }
   },
   settings: {
     getAI: async () => {
-      try {
-        const { data, error } = await supabase.from('settings').select('*').eq('key', 'ai_assistant').maybeSingle();
-        if (error || !data) {
-          return {
-            isActive: true,
-            verbosity: 'medium',
-            tone: 'friendly',
-            customInstructions: "Tu es l'assistant UniConnect de l'ESP Dakar."
-          };
-        }
-        return data.value;
-      } catch (e) {
-        return {
-          isActive: true,
-          verbosity: 'medium',
-          tone: 'friendly',
-          customInstructions: "Tu es l'assistant UniConnect de l'ESP Dakar."
-        };
-      }
+      const { data } = await supabase.from('settings').select('*').eq('key', 'ai_assistant').maybeSingle();
+      return data?.value || { isActive: true, verbosity: 'medium', tone: 'friendly', customInstructions: "Assistant UniConnect ESP." };
     }
   },
   logs: {
     list: async (): Promise<ActivityLog[]> => {
       const { data, error } = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false });
-      if (error) handleAPIError(error, "Chargement des logs impossible");
+      if (error) handleAPIError(error, "Logs impossibles");
       return data as ActivityLog[];
     }
   }

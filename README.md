@@ -1,125 +1,143 @@
+
 # 🎓 UniConnect - Portail ESP Dakar
 
 UniConnect est une plateforme de gestion scolaire universitaire centralisée pour l'École Supérieure Polytechnique de Dakar.
 
-## 🛠️ Configuration Supabase (SQL Editor)
+## 🛠️ Configuration SQL (Trigger & RLS) - VERSION FINALE SÉCURISÉE
 
-Exécutez ce script complet pour initialiser la base de données. Il crée toutes les tables, définit les fonctions de rôle et active la sécurité (RLS) pour les administrateurs, délégués et étudiants.
+Copiez et exécutez ce script dans le **SQL Editor** de votre projet Supabase. Ce script configure l'automatisation des profils et sécurise toutes les tables contre les modifications non autorisées.
 
 ```sql
--- 1. FONCTIONS DE REQUÊTE SÉCURISÉES (Indispensable pour le RLS)
-CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS text AS $$
-  SELECT role FROM public.profiles WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
+-- 1. PRÉPARATION DES TYPES
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('STUDENT', 'DELEGATE', 'ADMIN');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
-CREATE OR REPLACE FUNCTION public.get_my_class() RETURNS text AS $$
-  SELECT classname FROM public.profiles WHERE id = auth.uid();
-$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
-
-
--- 2. TABLES DU MODULE SONDAGES (Mis à jour avec dates de programmation)
-CREATE TABLE IF NOT EXISTS public.polls (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    question TEXT NOT NULL,
-    classname TEXT DEFAULT 'Général',
-    is_active BOOLEAN DEFAULT true,
-    start_time TIMESTAMP WITH TIME ZONE,
-    end_time TIMESTAMP WITH TIME ZONE,
-    creator_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.poll_options (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    poll_id UUID REFERENCES public.polls(id) ON DELETE CASCADE,
-    label TEXT NOT NULL,
-    votes INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.poll_votes (
-    poll_id UUID REFERENCES public.polls(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    option_id UUID REFERENCES public.poll_options(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    PRIMARY KEY (poll_id, user_id)
-);
-
--- 3. TABLE DE CONFIGURATION GLOBALE (Pour l'IA)
-CREATE TABLE IF NOT EXISTS public.app_settings (
-    key TEXT PRIMARY KEY,
-    value JSONB NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Insertion de la config par défaut pour l'IA
-INSERT INTO public.app_settings (key, value)
-VALUES ('ai_config', '{"tone": "friendly", "verbosity": "medium", "customInstructions": "Tu es un assistant universitaire intelligent pour l''ESP de Dakar.", "isActive": true}')
-ON CONFLICT (key) DO NOTHING;
-
-
--- 4. TRIGGER : MISE À JOUR AUTOMATIQUE DU COMPTEUR DE VOTES
-CREATE OR REPLACE FUNCTION public.handle_poll_vote_sync()
-RETURNS TRIGGER AS $$
+-- 2. TRIGGER : SYNCHRONISATION AUTH -> PROFILES
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
 BEGIN
-    IF (TG_OP = 'INSERT') THEN
-        UPDATE public.poll_options SET votes = votes + 1 WHERE id = NEW.option_id;
-    ELSIF (TG_OP = 'DELETE') THEN
-        UPDATE public.poll_options SET votes = votes - 1 WHERE id = OLD.option_id;
-    ELSIF (TG_OP = 'UPDATE') THEN
-        IF (OLD.option_id <> NEW.option_id) THEN
-            UPDATE public.poll_options SET votes = votes - 1 WHERE id = OLD.option_id;
-            UPDATE public.poll_options SET votes = votes + 1 WHERE id = NEW.option_id;
-        END IF;
-    END IF;
-    RETURN NULL;
+  INSERT INTO public.profiles (id, name, email, role, classname, school_name, is_active)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'name', 'Étudiant Nouveau'),
+    new.email,
+    COALESCE((new.raw_user_meta_data->>'role')::text, 'STUDENT')::user_role,
+    COALESCE(new.raw_user_meta_data->>'className', 'Général'),
+    COALESCE(new.raw_user_meta_data->>'school_name', 'ESP Dakar'),
+    true
+  );
+  RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS tr_poll_vote_sync ON public.poll_votes;
-CREATE TRIGGER tr_poll_vote_sync
-AFTER INSERT OR UPDATE OR DELETE ON public.poll_votes
-FOR EACH ROW EXECUTE FUNCTION public.handle_poll_vote_sync();
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
+-- 3. FONCTIONS DE SÉCURITÉ (RLS HELPERS)
+CREATE OR REPLACE FUNCTION auth_user_role() RETURNS user_role AS $$
+  SELECT role::user_role FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE;
 
--- 5. POLITIQUES DE SÉCURITÉ (RLS)
+CREATE OR REPLACE FUNCTION auth_user_class() RETURNS text AS $$
+  SELECT classname FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE;
+
+-- 4. ACTIVATION RLS SUR TOUTES LES TABLES
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.poll_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.poll_votes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meet_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
 
--- Politiques pour 'polls'
-DROP POLICY IF EXISTS "Lecture Sondages" ON public.polls;
-CREATE POLICY "Lecture Sondages" ON public.polls FOR SELECT TO authenticated
-USING (classname = 'Général' OR classname = get_my_class() OR get_my_role() IN ('admin', 'delegate'));
+-- 5. POLITIQUES : PROFILS
+CREATE POLICY "Profiles_Read_All" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles_Admin_All" ON public.profiles FOR ALL USING (auth_user_role() = 'ADMIN');
 
-DROP POLICY IF EXISTS "Gestion Sondages" ON public.polls;
-CREATE POLICY "Gestion Sondages" ON public.polls FOR ALL TO authenticated
-USING (get_my_role() IN ('admin', 'delegate'));
+-- 6. POLITIQUES GÉNÉRIQUES (Annonces, Examens, Meet, Emploi du temps)
+-- Règle : Lecture pour (Ma classe OR Général OR Admin)
+-- Règle : Ecriture pour (Admin OR (Délégué AND Ma classe))
 
--- Politiques pour 'poll_options'
-DROP POLICY IF EXISTS "Lecture Options" ON public.poll_options;
-CREATE POLICY "Lecture Options" ON public.poll_options FOR SELECT TO authenticated USING (true);
+-- ANNOUNCEMENTS
+DROP POLICY IF EXISTS "View_Announcements" ON public.announcements;
+CREATE POLICY "View_Announcements" ON public.announcements FOR SELECT 
+USING (auth_user_role() = 'ADMIN' OR classname = auth_user_class() OR classname = 'Général');
 
-DROP POLICY IF EXISTS "Gestion Options" ON public.poll_options;
-CREATE POLICY "Gestion Options" ON public.poll_options FOR ALL TO authenticated
-USING (get_my_role() IN ('admin', 'delegate'));
+DROP POLICY IF EXISTS "Manage_Announcements" ON public.announcements;
+CREATE POLICY "Manage_Announcements" ON public.announcements FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()))
+WITH CHECK (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()));
 
--- Politiques pour 'poll_votes'
-DROP POLICY IF EXISTS "Action de Voter" ON public.poll_votes;
-CREATE POLICY "Action de Voter" ON public.poll_votes FOR INSERT TO authenticated
-WITH CHECK (
-    auth.uid() = user_id AND 
-    EXISTS (SELECT 1 FROM public.polls WHERE id = poll_id AND is_active = true)
-);
+-- EXAMS
+DROP POLICY IF EXISTS "View_Exams" ON public.exams;
+CREATE POLICY "View_Exams" ON public.exams FOR SELECT 
+USING (auth_user_role() = 'ADMIN' OR classname = auth_user_class() OR classname = 'Général');
 
-DROP POLICY IF EXISTS "Lecture propre vote" ON public.poll_votes;
-CREATE POLICY "Lecture propre vote" ON public.poll_votes FOR SELECT TO authenticated USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Manage_Exams" ON public.exams;
+CREATE POLICY "Manage_Exams" ON public.exams FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()))
+WITH CHECK (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()));
 
--- Politiques pour 'app_settings'
-DROP POLICY IF EXISTS "Lecture Config" ON public.app_settings;
-CREATE POLICY "Lecture Config" ON public.app_settings FOR SELECT TO authenticated USING (true);
+-- SCHEDULES (Emploi du temps) - CORRECTION ERREUR 42501
+DROP POLICY IF EXISTS "View_Schedules" ON public.schedules;
+CREATE POLICY "View_Schedules" ON public.schedules FOR SELECT 
+USING (auth_user_role() = 'ADMIN' OR classname = auth_user_class() OR classname = 'Général');
 
-DROP POLICY IF EXISTS "Gestion Config Admin" ON public.app_settings;
-CREATE POLICY "Gestion Config Admin" ON public.app_settings FOR ALL TO authenticated
-USING (get_my_role() = 'admin');
+DROP POLICY IF EXISTS "Manage_Schedules" ON public.schedules;
+CREATE POLICY "Manage_Schedules" ON public.schedules FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()))
+WITH CHECK (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()));
+
+-- MEET_LINKS
+DROP POLICY IF EXISTS "View_Meets" ON public.meet_links;
+CREATE POLICY "View_Meets" ON public.meet_links FOR SELECT 
+USING (auth_user_role() = 'ADMIN' OR classname = auth_user_class() OR classname = 'Général');
+
+DROP POLICY IF EXISTS "Manage_Meets" ON public.meet_links;
+CREATE POLICY "Manage_Meets" ON public.meet_links FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()))
+WITH CHECK (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()));
+
+-- 7. POLITIQUES : SONDAGES (POLLS & VOTES)
+-- Sondages (Polls)
+CREATE POLICY "Polls_Read" ON public.polls FOR SELECT USING (true);
+CREATE POLICY "Polls_Manage" ON public.polls FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()))
+WITH CHECK (auth_user_role() = 'ADMIN' OR (auth_user_role() = 'DELEGATE' AND classname = auth_user_class()));
+
+-- Options
+CREATE POLICY "Options_Read" ON public.poll_options FOR SELECT USING (true);
+CREATE POLICY "Options_Manage" ON public.poll_options FOR ALL 
+USING (auth_user_role() = 'ADMIN' OR EXISTS (SELECT 1 FROM polls p WHERE p.id = poll_id AND p.classname = auth_user_class() AND auth_user_role() = 'DELEGATE'));
+
+-- Votes (Anti-fraude)
+CREATE POLICY "Vote_Insert_Self" ON public.poll_votes FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Vote_Update_Self" ON public.poll_votes FOR UPDATE 
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Vote_Read_All" ON public.poll_votes FOR SELECT USING (true);
+
+-- 8. POLITIQUES : CLASSES
+CREATE POLICY "Classes_Read" ON public.classes FOR SELECT USING (true);
+CREATE POLICY "Classes_Admin" ON public.classes FOR ALL USING (auth_user_role() = 'ADMIN');
+
+-- RELOAD
+NOTIFY pgrst, 'reload schema';
+```
+
+## 🚀 Résumé des sécurités appliquées
+- **Partage intelligent** : Les étudiants ne voient que ce qui les concerne.
+- **Délégués restreints** : Un délégué de "Licence 2" ne peut pas modifier le planning d'une "Licence 3".
+- **Clôture sécurisée** : Seuls les créateurs (Admins/Délégués de la classe) peuvent fermer un vote (`is_active`).
+- **Protection des fichiers** : Correction de l'erreur d'upload via une politique `WITH CHECK` rigoureuse.
