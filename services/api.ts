@@ -1,10 +1,13 @@
 
 // Complete implementation of the API service using Supabase client.
 import { supabase } from './supabaseClient';
-import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, AISettings, UserRole } from '../types';
+import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole } from '../types';
 
 const handleAPIError = (error: any, fallback: string) => {
   if (!error) return;
+  // Ne pas considérer "0 rows" comme une erreur fatale dans certains cas
+  if (error.code === 'PGRST116') return;
+  
   console.error("API Error Detailed:", error);
   
   let message = fallback;
@@ -12,7 +15,21 @@ const handleAPIError = (error: any, fallback: string) => {
   if (typeof error === 'string') {
     message = error;
   } else if (error && typeof error === 'object') {
-    message = error.message || error.error_description || (error.error && error.error.message) || JSON.stringify(error);
+    if (error.message) {
+      message = error.message;
+    } else if (error.error_description) {
+      message = error.error_description;
+    } else if (error.details) {
+      message = error.details;
+    } else if (error.hint) {
+      message = `${fallback} : ${error.hint}`;
+    } else {
+      try {
+        message = JSON.stringify(error);
+      } catch (e) {
+        message = fallback;
+      }
+    }
   }
 
   throw new Error(message);
@@ -35,7 +52,7 @@ export const API = {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) return null;
-        const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (error || !profile) return null;
         return mapProfile(profile);
       } catch (e) {
@@ -46,8 +63,8 @@ export const API = {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
       if (error) handleAPIError(error, "Erreur d'authentification");
       
-      const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-      if (pError) handleAPIError(pError, "Profil non trouvé");
+      const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+      if (pError || !profile) throw new Error("Profil utilisateur introuvable.");
       
       return mapProfile(profile);
     },
@@ -60,8 +77,8 @@ export const API = {
       if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
 
-      const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', id).select().single();
-      if (error) handleAPIError(error, "Mise à jour échouée");
+      const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', id).select().maybeSingle();
+      if (error || !data) handleAPIError(error, "Mise à jour échouée");
       return mapProfile(data);
     },
     getUsers: async (): Promise<User[]> => {
@@ -83,12 +100,12 @@ export const API = {
         }
       });
       
-      if (error) handleAPIError(error, "Création du compte Auth impossible");
-      if (!data.user) throw new Error("Erreur inattendue : Utilisateur non créé.");
+      if (error) handleAPIError(error, "Création du compte impossible");
+      if (!data.user) throw new Error("Utilisateur non créé.");
 
-      const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      const { data: profile, error: pError } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
       if (pError || !profile) {
-        const { data: manualProfile, error: mError } = await supabase.from('profiles').insert({
+        const { data: manual, error: mError } = await supabase.from('profiles').insert({
           id: data.user.id,
           name: userData.name,
           email: userData.email,
@@ -97,15 +114,14 @@ export const API = {
           school_name: userData.schoolName || 'ESP Dakar',
           is_active: true,
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`
-        }).select().single();
-        if (mError) handleAPIError(mError, "Le trigger a échoué et l'insert manuel aussi.");
-        return mapProfile(manualProfile);
+        }).select().maybeSingle();
+        if (mError || !manual) handleAPIError(mError, "Erreur lors de la création du profil");
+        return mapProfile(manual);
       }
-      
       return mapProfile(profile);
     },
     toggleUserStatus: async (userId: string) => {
-      const { data: profile } = await supabase.from('profiles').select('is_active').eq('id', userId).single();
+      const { data: profile } = await supabase.from('profiles').select('is_active').eq('id', userId).maybeSingle();
       const { error } = await supabase.from('profiles').update({ is_active: !profile?.is_active }).eq('id', userId);
       if (error) handleAPIError(error, "Modification du statut impossible");
     },
@@ -134,7 +150,7 @@ export const API = {
     },
     create: async (ann: any) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user?.id).single();
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user?.id).maybeSingle();
       
       const { error } = await supabase.from('announcements').insert({
         title: ann.title,
@@ -232,7 +248,7 @@ export const API = {
       const { data: polls, error } = await supabase.from('polls').select('*, options:poll_options(*)').order('created_at', { ascending: false });
       if (error) handleAPIError(error, "Chargement des sondages impossible");
       
-      const { data: votes } = await supabase.from('poll_votes').select('*').eq('user_id', user?.id);
+      const { data: votes } = user ? await supabase.from('poll_votes').select('*').eq('user_id', user.id) : { data: [] };
       
       return (polls || []).map(p => ({
         id: p.id,
@@ -242,7 +258,7 @@ export const API = {
         startTime: p.start_time,
         endTime: p.end_time,
         createdAt: p.created_at,
-        options: p.options,
+        options: p.options || [],
         hasVoted: votes?.some(v => v.poll_id === p.id) || false,
         userVoteOptionId: votes?.find(v => v.poll_id === p.id)?.option_id,
         totalVotes: (p.options || []).reduce((acc: number, o: any) => acc + (o.votes || 0), 0)
@@ -250,7 +266,7 @@ export const API = {
     },
     vote: async (pollId: string, optionId: string) => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error("Veuillez vous connecter pour voter.");
       
       const { error } = await supabase.from('poll_votes').upsert({ 
         poll_id: pollId, 
@@ -269,15 +285,15 @@ export const API = {
         start_time: poll.startTime || null,
         end_time: poll.endTime || null,
         is_active: true
-      }).select().single();
-      if (error) handleAPIError(error, "Création du sondage impossible");
+      }).select().maybeSingle();
+      if (error || !data) handleAPIError(error, "Création du sondage impossible");
       
       const options = poll.options.map((o: any) => ({ poll_id: data.id, label: o.label, votes: 0 }));
       const { error: optError } = await supabase.from('poll_options').insert(options);
       if (optError) handleAPIError(optError, "Création des options impossible");
     },
     toggleStatus: async (id: string) => {
-      const { data: poll } = await supabase.from('polls').select('is_active').eq('id', id).single();
+      const { data: poll } = await supabase.from('polls').select('is_active').eq('id', id).maybeSingle();
       const { error } = await supabase.from('polls').update({ is_active: !poll?.is_active }).eq('id', id);
       if (error) handleAPIError(error, "Changement de statut impossible");
     },
@@ -396,33 +412,34 @@ export const API = {
         .subscribe();
     }
   },
+  settings: {
+    getAI: async () => {
+      try {
+        const { data, error } = await supabase.from('settings').select('*').eq('key', 'ai_assistant').maybeSingle();
+        if (error || !data) {
+          return {
+            isActive: true,
+            verbosity: 'medium',
+            tone: 'friendly',
+            customInstructions: "Tu es l'assistant UniConnect de l'ESP Dakar."
+          };
+        }
+        return data.value;
+      } catch (e) {
+        return {
+          isActive: true,
+          verbosity: 'medium',
+          tone: 'friendly',
+          customInstructions: "Tu es l'assistant UniConnect de l'ESP Dakar."
+        };
+      }
+    }
+  },
   logs: {
     list: async (): Promise<ActivityLog[]> => {
       const { data, error } = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false });
       if (error) handleAPIError(error, "Chargement des logs impossible");
       return data as ActivityLog[];
-    }
-  },
-  settings: {
-    getAI: async (): Promise<AISettings> => {
-      const { data, error } = await supabase.from('ai_settings').select('*').single();
-      if (error) return { tone: 'friendly', verbosity: 'medium', customInstructions: '', isActive: true };
-      return {
-        tone: data.tone,
-        verbosity: data.verbosity,
-        customInstructions: data.custom_instructions,
-        isActive: data.is_active
-      } as AISettings;
-    },
-    updateAI: async (settings: AISettings) => {
-      const { error } = await supabase.from('ai_settings').upsert({
-        id: (await supabase.from('ai_settings').select('id').single()).data?.id || undefined,
-        tone: settings.tone,
-        verbosity: settings.verbosity,
-        custom_instructions: settings.customInstructions,
-        is_active: settings.isActive
-      });
-      if (error) handleAPIError(error, "Sauvegarde IA impossible");
     }
   }
 };

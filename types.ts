@@ -1,4 +1,3 @@
-
 export enum UserRole {
   STUDENT = 'STUDENT',
   DELEGATE = 'DELEGATE',
@@ -13,14 +12,7 @@ export interface User {
   className: string; // e.g., "Licence 2 - Info"
   avatar?: string;
   schoolName?: string;
-  isActive?: boolean; // New field for banning/disabling
-}
-
-export interface AISettings {
-  tone: 'concise' | 'detailed' | 'academic' | 'friendly';
-  verbosity: 'low' | 'medium' | 'high';
-  customInstructions: string;
-  isActive: boolean;
+  isActive?: boolean;
 }
 
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent';
@@ -37,21 +29,20 @@ export interface Announcement {
   author: string;
   date: string;
   className: string;
-  priority: AnnouncementPriority; // Remplacera isImportant pour le tri principal
-  isImportant?: boolean; // Gardé pour rétrocompatibilité (calculé depuis priority)
+  priority: AnnouncementPriority;
   links?: ExternalLink[];
-  attachments?: string[]; // URLs vers des fichiers
+  attachments?: string[];
 }
 
 export interface Exam {
   id: string;
   subject: string;
-  date: string; // ISO string
+  date: string;
   duration: string;
   room: string;
   notes?: string;
   className: string;
-  links?: ExternalLink[]; // New field for attachments/resources
+  links?: ExternalLink[];
 }
 
 export interface ScheduleFile {
@@ -82,13 +73,13 @@ export interface Poll {
   question: string;
   options: PollOption[];
   className: string;
-  isActive: boolean; // Manual toggle
-  startTime?: string; // New: Automatic start
-  endTime?: string; // New: Automatic end
+  isActive: boolean;
+  startTime?: string;
+  endTime?: string;
   hasVoted: boolean; 
-  userVoteOptionId?: string; // New field to track which option the user picked
+  userVoteOptionId?: string;
   totalVotes: number;
-  createdAt: string; // ISO String
+  createdAt: string;
 }
 
 export interface ClassGroup {
@@ -103,11 +94,11 @@ export interface AppNotification {
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'alert';
-  timestamp: string; // ISO string
+  timestamp: string;
   isRead: boolean;
   link?: string;
-  targetRole?: UserRole; // Pour cibler un rôle spécifique (ex: ADMIN)
-  targetClass?: string;  // Pour cibler une classe spécifique
+  targetRole?: UserRole;
+  targetClass?: string;
 }
 
 export interface ActivityLog {

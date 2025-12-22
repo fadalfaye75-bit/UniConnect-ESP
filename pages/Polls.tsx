@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,9 @@ export default function Polls() {
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [selectedPollForResults, setSelectedPollForResults] = useState<Poll | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  
+  // État pour gérer les chargements de vote individuels
+  const [votingIds, setVotingIds] = useState<Set<string>>(new Set());
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed' | 'scheduled'>('all');
@@ -53,7 +57,6 @@ export default function Polls() {
     fetchPolls(true);
     API.classes.list().then(setClasses);
     const subscription = API.polls.subscribe(() => fetchPolls(false));
-    // Fix: Return a void function for useEffect destructor to avoid Promise assignment error
     return () => { subscription.unsubscribe(); };
   }, [fetchPolls]);
 
@@ -74,7 +77,6 @@ export default function Polls() {
       const target = (poll.className || 'Général').toLowerCase().trim();
       const userClass = (user?.className || '').toLowerCase().trim();
       
-      // Visibilité logicielle plus souple
       const isVisible = user?.role === UserRole.ADMIN 
         ? true 
         : (target === userClass || target === 'général' || poll.className === 'Général');
@@ -108,7 +110,7 @@ export default function Polls() {
   }, [user, polls, searchTerm, statusFilter, classFilter]);
 
   const handleVote = async (poll: Poll, optionId: string) => {
-    if (!user) return;
+    if (!user || votingIds.has(poll.id)) return;
     
     const now = new Date();
     const pollStart = poll.startTime ? new Date(poll.startTime) : null;
@@ -123,6 +125,7 @@ export default function Polls() {
         return;
     }
 
+    // Mise à jour optimiste
     const originalPolls = [...polls];
     setPolls(prev => prev.map(p => {
         if (p.id === poll.id) {
@@ -134,15 +137,23 @@ export default function Polls() {
         return p;
     }));
 
+    setVotingIds(prev => new Set(prev).add(poll.id));
+
     try {
       await API.polls.vote(poll.id, optionId);
-      addNotification({ title: 'Vote enregistré', message: 'Merci !', type: 'success' });
+      addNotification({ title: 'Vote enregistré', message: 'Votre voix a été comptabilisée.', type: 'success' });
     } catch (error: any) {
       setPolls(originalPolls);
       addNotification({ 
         title: 'Erreur', 
         message: error?.message || 'Échec de la connexion lors du vote.', 
         type: 'alert' 
+      });
+    } finally {
+      setVotingIds(prev => {
+        const next = new Set(prev);
+        next.delete(poll.id);
+        return next;
       });
     }
   };
@@ -170,7 +181,7 @@ export default function Polls() {
     } catch (error: any) {
       addNotification({ 
         title: 'Erreur de création', 
-        message: error?.message || 'Une erreur est survenue lors de la création.', 
+        message: error?.message || 'Une erreur est survenue.', 
         type: 'alert' 
       });
     } finally {
@@ -183,11 +194,7 @@ export default function Polls() {
       await API.polls.toggleStatus(poll.id);
       fetchPolls();
     } catch (error: any) {
-       addNotification({ 
-         title: 'Erreur', 
-         message: error?.message || 'Action impossible sur le statut.', 
-         type: 'alert' 
-       });
+       addNotification({ title: 'Erreur', message: error?.message, type: 'alert' });
     }
   };
 
@@ -197,11 +204,7 @@ export default function Polls() {
           await API.polls.delete(id);
           fetchPolls();
       } catch(error: any) {
-          addNotification({ 
-            title: 'Erreur', 
-            message: error?.message || 'Action de suppression échouée.', 
-            type: 'alert' 
-          });
+          addNotification({ title: 'Erreur', message: error?.message, type: 'alert' });
       }
   };
 
@@ -272,6 +275,7 @@ export default function Polls() {
         {displayedPolls.length > 0 ? displayedPolls.map(poll => {
             const totalVotes = poll.totalVotes || 0;
             const hasVoted = poll.hasVoted;
+            const isVoting = votingIds.has(poll.id);
             
             const now = new Date();
             const pollStart = poll.startTime ? new Date(poll.startTime) : null;
@@ -297,7 +301,7 @@ export default function Polls() {
                    </div>
                    {canManage && (
                         <div className="flex gap-2">
-                            <button onClick={() => handleToggleStatus(poll)} className="p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-500 hover:text-primary-500 rounded-xl transition-colors" title="Désactiver manuellement">
+                            <button onClick={() => handleToggleStatus(poll)} className="p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-500 hover:text-primary-500 rounded-xl transition-colors" title="Statut">
                                 {poll.isActive ? <Lock size={18} /> : <Unlock size={18} />}
                             </button>
                             <button onClick={() => handleDelete(poll.id)} className="p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-500 hover:text-red-500 rounded-xl transition-colors">
@@ -313,7 +317,7 @@ export default function Polls() {
                   {poll.options.map(option => {
                     const percentage = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
                     const isSelected = poll.userVoteOptionId === option.id;
-                    const canVote = isActuallyActive && !hasVoted;
+                    const canVote = isActuallyActive && !hasVoted && !isVoting;
                     
                     return (
                       <button 
@@ -322,13 +326,14 @@ export default function Polls() {
                         disabled={!canVote} 
                         className={`relative w-full text-left rounded-[2rem] overflow-hidden transition-all h-16 border-2 flex items-center px-6 ${
                           isSelected ? 'border-primary-500 bg-primary-50/10' : 'border-gray-100 dark:border-gray-800'
-                        } ${!canVote ? 'cursor-default' : 'hover:border-primary-300'}`}
+                        } ${!canVote ? 'cursor-default' : 'hover:border-primary-300 active:scale-95 shadow-sm'}`}
                       >
                          <div className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ${isSelected ? 'bg-primary-500/20' : 'bg-gray-50 dark:bg-gray-800/40'}`} style={{ width: `${percentage}%` }} />
                          <div className="flex-1 flex items-center justify-between z-10 relative">
-                              <span className={`text-sm font-black italic ${isSelected ? 'text-primary-600' : 'text-gray-700 dark:text-gray-300'}`}>
+                              <span className={`text-sm font-black italic flex items-center gap-3 ${isSelected ? 'text-primary-600' : 'text-gray-700 dark:text-gray-300'}`}>
                                 {option.label}
-                                {isSelected && <CheckCircle2 size={18} className="inline ml-3 text-primary-500" />}
+                                {isSelected && <CheckCircle2 size={18} className="text-primary-500 animate-in zoom-in duration-300" />}
+                                {isVoting && <Loader2 size={14} className="animate-spin opacity-50" />}
                               </span>
                               <span className="font-black text-[11px] text-gray-400">{percentage}%</span>
                          </div>

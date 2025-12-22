@@ -223,6 +223,7 @@ export default function Announcements() {
              
              <div className="flex flex-wrap items-center gap-2">
                 <select 
+                   // Fixed: Explicitly handling the event to avoid Dispatch type assignment error
                    value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
                    className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-[10px] font-black text-gray-600 dark:text-gray-300 outline-none uppercase tracking-widest cursor-pointer hover:border-primary-300"
                 >
@@ -233,6 +234,7 @@ export default function Announcements() {
                 </select>
 
                 <select 
+                   // Fixed: Explicitly handling the event to avoid Dispatch type assignment error
                    value={classFilter} onChange={e => setClassFilter(e.target.value)}
                    className="px-4 py-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-[10px] font-black text-gray-600 dark:text-gray-300 outline-none uppercase tracking-widest cursor-pointer hover:border-primary-300"
                 >
@@ -299,10 +301,10 @@ export default function Announcements() {
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed font-medium italic opacity-90 mb-6">{ann.content}</p>
 
                   {/* LIENS ET FICHIERS JOINTS */}
-                  {(ann.links?.length > 0 || ann.attachments?.length > 0) && (
+                  {(ann.links && ann.links.length > 0 || ann.attachments && ann.attachments.length > 0) && (
                     <div className="pt-6 border-t border-gray-100 dark:border-gray-800 space-y-4">
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                        <Globe size={12} className="text-primary-500" /> Ressources attachées
+                        <Globe size={12} className="text-primary-500" /> Ressources et documents
                       </p>
                       <div className="flex flex-wrap gap-3">
                         {ann.links?.map((link, lidx) => (
@@ -311,8 +313,8 @@ export default function Announcements() {
                           </a>
                         ))}
                         {ann.attachments?.map((file, fidx) => (
-                          <a key={fidx} href={file} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-700 hover:bg-gray-900 dark:hover:bg-white hover:text-white dark:hover:text-gray-900 transition-all active:scale-95 shadow-sm">
-                            <FileText size={12} /> Fichier joint {fidx + 1} <Paperclip size={10} className="opacity-50" />
+                          <a key={fidx} href={file} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-100 text-gray-600 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-widest border border-gray-200 dark:border-gray-700 hover:bg-gray-900 dark:hover:bg-white hover:text-white dark:hover:text-gray-900 transition-all active:scale-95 shadow-sm">
+                            <FileText size={12} /> Consulter le fichier {fidx + 1} <Paperclip size={10} className="opacity-50" />
                           </a>
                         ))}
                       </div>
@@ -354,42 +356,70 @@ export default function Announcements() {
              </div>
           </div>
 
-          {/* AJOUT DE LIENS */}
-          <div className="space-y-3">
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2"><LinkIcon size={14} className="text-primary-500"/> Liens utiles</label>
-            <div className="flex gap-2">
-              <input type="text" placeholder="Libellé" value={linkInput.label} onChange={e => setLinkInput({...linkInput, label: e.target.value})} className="flex-[1] px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 text-xs font-bold" />
-              <input type="url" placeholder="URL" value={linkInput.url} onChange={e => setLinkInput({...linkInput, url: e.target.value})} className="flex-[2] px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 text-xs font-bold" />
-              <button type="button" onClick={addLink} className="p-2 bg-primary-50 text-primary-600 rounded-xl hover:bg-primary-500 hover:text-white transition-colors"><Plus size={18}/></button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {newAnn.links.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-[10px] font-bold">
-                  {l.label} <button type="button" onClick={() => removeLink(i)}><X size={12} className="text-red-500"/></button>
-                </div>
-              ))}
-            </div>
+          {/* ESPACE LIENS UTILES */}
+          <div className="p-5 bg-blue-50/50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-800/30 space-y-4">
+             <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                <LinkIcon size={14} /> Liens utiles (URL)
+             </h4>
+             <div className="flex gap-2">
+                <input 
+                   type="text" placeholder="Libellé" value={linkInput.label}
+                   onChange={e => setLinkInput({...linkInput, label: e.target.value})}
+                   className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none" 
+                />
+                <input 
+                   type="url" placeholder="https://..." value={linkInput.url}
+                   onChange={e => setLinkInput({...linkInput, url: e.target.value})}
+                   className="flex-[2] px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none" 
+                />
+                <button 
+                  type="button" onClick={addLink}
+                  className="p-2 bg-primary-500 text-white rounded-xl hover:scale-105 transition-transform"
+                >
+                  <Plus size={18} />
+                </button>
+             </div>
+             <div className="flex flex-wrap gap-2">
+                {newAnn.links.map((l, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-700 rounded-lg text-[9px] font-black border border-gray-100 dark:border-gray-600">
+                    <Globe size={10} className="text-primary-500" /> {l.label}
+                    <button type="button" onClick={() => removeLink(i)} className="text-red-500 ml-1"><X size={12}/></button>
+                  </div>
+                ))}
+             </div>
           </div>
 
-          {/* AJOUT DE PIECES JOINTES (Simulé par URL) */}
-          <div className="space-y-3">
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Paperclip size={14} className="text-primary-500"/> Fichiers (URLs)</label>
-            <div className="flex gap-2">
-              <input type="url" placeholder="Lien direct vers le document PDF/Image" value={attachmentInput} onChange={e => setAttachmentInput(e.target.value)} className="flex-1 px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 text-xs font-bold" />
-              <button type="button" onClick={addAttachment} className="p-2 bg-primary-50 text-primary-600 rounded-xl hover:bg-primary-500 hover:text-white transition-colors"><Plus size={18}/></button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {newAnn.attachments.map((a, i) => (
-                <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-[10px] font-bold truncate max-w-[200px]">
-                  Fichier {i+1} <button type="button" onClick={() => removeAttachment(i)}><X size={12} className="text-red-500"/></button>
-                </div>
-              ))}
-            </div>
+          {/* ESPACE PIÈCES JOINTES */}
+          <div className="p-5 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-3xl border border-emerald-100 dark:border-emerald-800/30 space-y-4">
+             <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                <Paperclip size={14} /> Fichiers joints (Lien direct)
+             </h4>
+             <div className="flex gap-2">
+                <input 
+                   type="url" placeholder="URL du document (Drive, Dropbox, PDF...)" value={attachmentInput}
+                   onChange={e => setAttachmentInput(e.target.value)}
+                   className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none" 
+                />
+                <button 
+                  type="button" onClick={addAttachment}
+                  className="p-2 bg-emerald-500 text-white rounded-xl hover:scale-105 transition-transform"
+                >
+                  <Plus size={18} />
+                </button>
+             </div>
+             <div className="flex flex-wrap gap-2">
+                {newAnn.attachments.map((url, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-700 rounded-lg text-[9px] font-black border border-gray-100 dark:border-gray-600 truncate max-w-[150px]">
+                    <FileText size={10} className="text-emerald-500" /> Fichier {i+1}
+                    <button type="button" onClick={() => removeAttachment(i)} className="text-red-500 ml-1"><X size={12}/></button>
+                  </div>
+                ))}
+             </div>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-2 uppercase tracking-widest">
+          <button type="submit" disabled={submitting} className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 transition-all flex justify-center items-center gap-2 uppercase tracking-widest active:scale-95">
             {submitting ? <Loader2 className="animate-spin" /> : <Send size={20} />}
-            {submitting ? 'Diffusion...' : 'Envoyer l\'annonce'}
+            {submitting ? 'Diffusion en cours...' : 'Envoyer l\'annonce'}
           </button>
         </form>
       </Modal>
