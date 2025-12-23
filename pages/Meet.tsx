@@ -11,6 +11,7 @@ export default function Meet() {
   const { user, adminViewClass } = useAuth();
   const { addNotification } = useNotification();
   const [meetings, setMeetings] = useState<MeetLink[]>([]);
+  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
@@ -18,12 +19,14 @@ export default function Meet() {
   const [dayFilter, setDayFilter] = useState('all');
   
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ title: '', platform: 'Google Meet', url: '', day: '', time: '' });
+  const [formData, setFormData] = useState({ title: '', platform: 'Google Meet', url: '', day: '', time: '', className: '' });
 
   const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   useEffect(() => {
     fetchMeetings();
+    API.classes.list().then(setClasses);
   }, [user, adminViewClass]);
 
   const fetchMeetings = async () => {
@@ -41,7 +44,7 @@ export default function Meet() {
   const displayedLinks = useMemo(() => {
     return meetings.filter(link => {
       const target = link.className || 'Général';
-      const matchesClass = user?.role === UserRole.ADMIN 
+      const matchesClass = isAdmin 
         ? (adminViewClass ? (target === adminViewClass || target === 'Général') : true)
         : (target === user?.className || target === 'Général');
       
@@ -52,7 +55,7 @@ export default function Meet() {
 
       return matchesClass && matchesSearch && matchesDay;
     });
-  }, [user, adminViewClass, meetings, searchTerm, dayFilter]);
+  }, [user, adminViewClass, meetings, searchTerm, dayFilter, isAdmin]);
 
   const handleCopy = (link: MeetLink) => {
     navigator.clipboard.writeText(`${link.title} - ${link.url}`).then(() => {
@@ -71,27 +74,49 @@ export default function Meet() {
 
   const openNewModal = () => {
     setEditingId(null);
-    setFormData({ title: '', platform: 'Google Meet', url: '', day: '', time: '' });
+    setFormData({ 
+      title: '', 
+      platform: 'Google Meet', 
+      url: '', 
+      day: '', 
+      time: '',
+      className: isAdmin ? '' : (user?.className || '')
+    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (link: MeetLink) => {
     setEditingId(link.id);
     const parts = link.time.split(' ');
-    setFormData({ title: link.title, platform: link.platform as string, url: link.url, day: parts[0] || '', time: parts[1] || '' });
+    setFormData({ 
+      title: link.title, 
+      platform: link.platform as string, 
+      url: link.url, 
+      day: parts[0] || '', 
+      time: parts[1] || '',
+      className: link.className
+    });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const targetClass = (user?.role === UserRole.ADMIN && adminViewClass) ? adminViewClass : (user?.className || 'Général');
+      const targetClass = isAdmin ? formData.className : (user?.className || 'Général');
       const timeString = `${formData.day} ${formData.time}`;
+      const payload = { 
+        title: formData.title, 
+        platform: formData.platform as any, 
+        url: formData.url, 
+        time: timeString, 
+        className: targetClass 
+      };
+
       if (editingId) {
-        await API.meet.update(editingId, { title: formData.title, platform: formData.platform as any, url: formData.url, time: timeString });
+        await API.meet.update(editingId, payload);
         addNotification({ title: 'Succès', message: 'Réunion mise à jour.', type: 'success' });
       } else {
-        await API.meet.create({ title: formData.title, platform: formData.platform as any, url: formData.url, time: timeString, className: targetClass });
+        await API.meet.create(payload);
         addNotification({ title: 'Succès', message: 'Réunion ajoutée.', type: 'success' });
       }
       fetchMeetings();
@@ -269,6 +294,24 @@ export default function Meet() {
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Heure</label>
                   <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-gray-700 focus:ring-4 focus:ring-emerald-50 dark:focus:ring-emerald-900/10 outline-none transition-all font-bold" />
                </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Classe de la session</label>
+              <select 
+                disabled={!isAdmin} 
+                value={formData.className} 
+                onChange={e => setFormData({...formData, className: e.target.value})} 
+                className={`w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                 <option value="">Sélectionner...</option>
+                 <option value="Général">Général (Tout l'ESP)</option>
+                 {isAdmin ? (
+                   classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                 ) : (
+                   <option value={user?.className}>{user?.className}</option>
+                 )}
+              </select>
             </div>
           </div>
 

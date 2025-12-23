@@ -26,6 +26,7 @@ export interface ExternalLink {
 
 export interface Announcement {
   id: string;
+  user_id?: string;
   title: string;
   content: string;
   author: string;
@@ -38,6 +39,7 @@ export interface Announcement {
 
 export interface Exam {
   id: string;
+  user_id?: string;
   subject: string;
   date: string;
   duration: string;
@@ -51,6 +53,7 @@ export type ScheduleCategory = 'Planning' | 'Examens' | 'Cours' | 'Autre';
 
 export interface ScheduleFile {
   id: string;
+  user_id?: string;
   version: string;
   uploadDate: string;
   url: string;
@@ -60,6 +63,7 @@ export interface ScheduleFile {
 
 export interface MeetLink {
   id: string;
+  user_id?: string;
   title: string;
   platform: 'Zoom' | 'Teams' | 'Google Meet' | 'Other';
   url: string;
@@ -75,6 +79,7 @@ export interface PollOption {
 
 export interface Poll {
   id: string;
+  user_id?: string;
   question: string;
   options: PollOption[];
   className: string;

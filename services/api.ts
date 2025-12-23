@@ -163,7 +163,9 @@ export const API = {
     },
     create: async (ann: any) => {
       const profile = await API.auth.getSession();
+      if (!profile) throw new Error("Non authentifié");
       const { error } = await supabase.from('announcements').insert({ 
+        user_id: profile.id,
         title: ann.title, 
         content: ann.content, 
         priority: ann.priority, 
@@ -210,7 +212,17 @@ export const API = {
       return (data || []).map(e => ({ ...e, className: e.classname }));
     },
     create: async (exam: any) => {
-      const { error } = await supabase.from('exams').insert({ subject: exam.subject, date: exam.date, duration: exam.duration, room: exam.room, notes: exam.notes, classname: exam.className });
+      const profile = await API.auth.getSession();
+      if (!profile) throw new Error("Non authentifié");
+      const { error } = await supabase.from('exams').insert({ 
+        user_id: profile.id,
+        subject: exam.subject, 
+        date: exam.date, 
+        duration: exam.duration, 
+        room: exam.room, 
+        notes: exam.notes, 
+        classname: exam.className 
+      });
       if (error) handleAPIError(error, "Action impossible");
 
       // Auto-notification
@@ -238,7 +250,16 @@ export const API = {
       return (data || []).map(m => ({ ...m, className: m.classname }));
     },
     create: async (meet: any) => {
-      const { error } = await supabase.from('meet_links').insert({ title: meet.title, platform: meet.platform, url: meet.url, time: meet.time, classname: meet.className });
+      const profile = await API.auth.getSession();
+      if (!profile) throw new Error("Non authentifié");
+      const { error } = await supabase.from('meet_links').insert({ 
+        user_id: profile.id,
+        title: meet.title, 
+        platform: meet.platform, 
+        url: meet.url, 
+        time: meet.time, 
+        classname: meet.className 
+      });
       if (error) handleAPIError(error, "Action impossible");
 
       // Auto-notification
@@ -269,6 +290,7 @@ export const API = {
       
       return (polls || []).map(p => ({
         id: p.id, 
+        user_id: p.user_id,
         question: p.question, 
         className: p.classname, 
         isActive: p.is_active, 
@@ -289,7 +311,10 @@ export const API = {
       if (error) handleAPIError(error, "Vote non enregistré");
     },
     create: async (poll: any) => {
+      const profile = await API.auth.getSession();
+      if (!profile) throw new Error("Non authentifié");
       const { data, error } = await supabase.from('polls').insert({ 
+        user_id: profile.id,
         question: poll.question, 
         classname: poll.className, 
         start_time: poll.startTime || null, 
@@ -314,7 +339,7 @@ export const API = {
     update: async (id: string, updates: any) => {
       const dbUpdates: any = {};
       if (updates.question !== undefined) dbUpdates.question = updates.question;
-      if (updates.className !== undefined) dbUpdates.classname = updates.classname;
+      if (updates.className !== undefined) dbUpdates.classname = updates.className;
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
       if (updates.startTime !== undefined) dbUpdates.start_time = updates.startTime;
       if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
@@ -353,10 +378,19 @@ export const API = {
     list: async (): Promise<ScheduleFile[]> => {
       const { data, error } = await supabase.from('schedules').select('*').order('upload_date', { ascending: false });
       if (error) handleAPIError(error, "Échec chargement archives");
-      return (data || []).map(s => ({ id: s.id, version: s.version, url: s.url, className: s.classname, uploadDate: s.upload_date, category: s.category || 'Planning' }));
+      return (data || []).map(s => ({ id: s.id, user_id: s.user_id, version: s.version, url: s.url, className: s.classname, uploadDate: s.upload_date, category: s.category || 'Planning' }));
     },
     create: async (sch: any) => {
-      const { error } = await supabase.from('schedules').insert({ version: sch.version, url: sch.url, classname: sch.className, category: sch.category, upload_date: new Date().toISOString() });
+      const profile = await API.auth.getSession();
+      if (!profile) throw new Error("Non authentifié");
+      const { error } = await supabase.from('schedules').insert({ 
+        user_id: profile.id,
+        version: sch.version, 
+        url: sch.url, 
+        classname: sch.className, 
+        category: sch.category, 
+        upload_date: new Date().toISOString() 
+      });
       if (error) handleAPIError(error, "Publication impossible");
 
       // Auto-notification
@@ -379,10 +413,30 @@ export const API = {
       if (!profile) return [];
       const { data, error } = await supabase.from('notifications').select('*').or(`target_user_id.eq.${profile.id},target_role.eq.${profile.role},target_class.eq.${profile.className},target_class.eq.Général`).order('timestamp', { ascending: false });
       if (error) handleAPIError(error, "Erreur notifications");
-      return (data || []).map(n => ({ id: n.id, title: n.title, message: n.message, type: n.type, timestamp: n.timestamp, isRead: n.is_read }));
+      return (data || []).map(n => ({ 
+        id: n.id, 
+        title: n.title, 
+        message: n.message, 
+        type: n.type, 
+        timestamp: n.timestamp, 
+        isRead: n.is_read,
+        link: n.link,
+        targetRole: n.target_role,
+        targetClass: n.target_class
+      }));
     },
     add: async (notif: any) => {
-      const { error } = await supabase.from('notifications').insert({ ...notif, timestamp: new Date().toISOString(), is_read: false });
+      const { error } = await supabase.from('notifications').insert({ 
+        title: notif.title,
+        message: notif.message,
+        type: notif.type,
+        link: notif.link,
+        target_role: notif.targetRole,
+        target_class: notif.targetClass,
+        target_user_id: notif.targetUserId,
+        timestamp: new Date().toISOString(), 
+        is_read: false 
+      });
       if (error) handleAPIError(error, "Échec envoi notification");
     },
     markRead: async (id: string) => {

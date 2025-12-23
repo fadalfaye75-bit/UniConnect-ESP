@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power, Share2 } from 'lucide-react';
+import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power, Share2, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, Poll, ClassGroup } from '../types';
 import Modal from '../components/Modal';
@@ -14,6 +14,7 @@ export default function Polls() {
   const themeColor = user?.themeColor || '#0ea5e9';
   
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expandedPollId, setExpandedPollId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export default function Polls() {
   });
 
   const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   const fetchPolls = useCallback(async (showLoader = false) => {
     try {
@@ -47,9 +49,20 @@ export default function Polls() {
 
   useEffect(() => {
     fetchPolls(true);
+    API.classes.list().then(setClasses);
     const subscription = API.polls.subscribe(() => fetchPolls(false));
     return () => { subscription.unsubscribe(); };
   }, [fetchPolls]);
+
+  // Initialisation de la classe lors de l'ouverture du modal
+  useEffect(() => {
+    if (isModalOpen) {
+      setNewPoll(prev => ({
+        ...prev,
+        className: isAdmin ? '' : (user?.className || '')
+      }));
+    }
+  }, [isModalOpen, isAdmin, user?.className]);
 
   const handleVote = useCallback(async (poll: Poll, optionId: string) => {
     if (!user || votingIds.has(poll.id) || poll.userVoteOptionId === optionId) return;
@@ -94,13 +107,37 @@ export default function Polls() {
     }
   }, [canManage, addNotification, fetchPolls]);
 
+  const handleCreatePoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const targetClass = isAdmin ? newPoll.className : (user?.className || 'Général');
+      const payload = {
+        question: newPoll.question,
+        className: targetClass,
+        options: newPoll.options.filter(o => o.trim() !== '').map(label => ({ label })),
+        startTime: newPoll.startTime,
+        endTime: newPoll.endTime
+      };
+      await API.polls.create(payload);
+      addNotification({ title: 'Succès', message: 'Consultation lancée.', type: 'success' });
+      setIsModalOpen(false);
+      fetchPolls(false);
+    } catch (error: any) {
+      addNotification({ title: 'Erreur', message: 'Création impossible.', type: 'alert' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const displayedPolls = useMemo(() => {
     const now = new Date();
     return polls.filter(poll => {
       const target = (poll.className || 'Général').toLowerCase().trim();
       const userClass = (user?.className || '').toLowerCase().trim();
       
-      let isVisible = user?.role === UserRole.ADMIN || target === 'général' || target === 'general' || target === '' || target === userClass;
+      let isVisible = isAdmin || target === 'général' || target === 'general' || target === '' || target === userClass;
       if (!isVisible) return false;
       
       const pollStart = poll.startTime ? new Date(poll.startTime) : null;
@@ -117,7 +154,7 @@ export default function Polls() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [user, polls, searchTerm, statusFilter]);
+  }, [user, polls, searchTerm, statusFilter, isAdmin]);
 
   if (loading) return (
     <div className="flex flex-col justify-center items-center h-64 gap-4">
@@ -156,7 +193,6 @@ export default function Polls() {
         {displayedPolls.map(poll => {
             const isActuallyActive = poll.isActive;
             const isExpanded = expandedPollId === poll.id;
-            const maxVotes = Math.max(...poll.options.map(o => o.votes), 1);
 
             return (
               <div 
@@ -232,6 +268,60 @@ export default function Polls() {
             );
         })}
       </div>
+
+      {/* Modal de création */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Lancer une consultation">
+        <form onSubmit={handleCreatePoll} className="space-y-6">
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Question centrale</label>
+            <textarea required value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold outline-none italic" rows={3} placeholder="Quelle est votre opinion sur..." />
+          </div>
+
+          <div className="space-y-3">
+             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Options de vote</label>
+             {newPoll.options.map((opt, i) => (
+               <div key={i} className="flex gap-2">
+                 <input 
+                  type="text" value={opt} onChange={e => {
+                    const next = [...newPoll.options];
+                    next[i] = e.target.value;
+                    setNewPoll({...newPoll, options: next});
+                  }}
+                  className="flex-1 px-5 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 text-sm font-bold italic outline-none"
+                  placeholder={`Option ${i+1}`}
+                 />
+                 {newPoll.options.length > 2 && (
+                   <button type="button" onClick={() => setNewPoll({...newPoll, options: newPoll.options.filter((_, idx) => idx !== i)})} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all"><X size={18}/></button>
+                 )}
+               </div>
+             ))}
+             <button type="button" onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} className="text-[10px] font-black text-primary-500 uppercase tracking-widest flex items-center gap-2 px-2 hover:underline">
+               <Plus size={14} /> Ajouter un choix
+             </button>
+          </div>
+
+          <div>
+             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Cible</label>
+             <select 
+               disabled={!isAdmin}
+               value={newPoll.className} 
+               onChange={e => setNewPoll({...newPoll, className: e.target.value})} 
+               className={`w-full px-5 py-4 rounded-xl bg-gray-50 dark:bg-gray-800 text-[10px] font-black uppercase outline-none ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+             >
+                <option value="">Général (ESP)</option>
+                {isAdmin ? (
+                  classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                ) : (
+                  <option value={user?.className}>{user?.className}</option>
+                )}
+             </select>
+          </div>
+
+          <button type="submit" disabled={submitting} className="w-full bg-primary-500 text-white font-black py-5 rounded-[2.5rem] shadow-xl uppercase tracking-widest italic flex items-center justify-center gap-2 active:scale-95 transition-all">
+             {submitting ? <Loader2 className="animate-spin" /> : <Send size={20} />} Diffuser le scrutin
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

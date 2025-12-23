@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
+import { UserRole } from '../types';
 
 export const UserAvatar = React.memo(({ name, color, className = "w-10 h-10", textClassName = "text-xs" }: { name: string, color?: string, className?: string, textClassName?: string }) => {
   const initials = useMemo(() => {
@@ -81,17 +82,30 @@ export default function Layout() {
     }
   }, [isDataLoaded]);
 
-  // Instant local filtering
+  // Instant local filtering with role-based restrictions
   const searchResults = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (query.length < 2) return { announcements: [], exams: [], schedules: [] };
 
-    return {
-      announcements: allData.anns.filter(a => a.title.toLowerCase().includes(query) || a.content.toLowerCase().includes(query)).slice(0, 4),
-      exams: allData.exams.filter(e => e.subject.toLowerCase().includes(query) || e.room.toLowerCase().includes(query)).slice(0, 4),
-      schedules: allData.schs.filter(s => s.category.toLowerCase().includes(query) || s.version.toLowerCase().includes(query)).slice(0, 4)
+    const filterByAccess = (item: any) => {
+      const target = (item.className || item.classname || 'Général').toLowerCase().trim();
+      if (user?.role === UserRole.ADMIN) return true;
+      const userClass = (user?.className || '').toLowerCase().trim();
+      return target === userClass || target === 'général' || target === 'general';
     };
-  }, [searchQuery, allData]);
+
+    return {
+      announcements: allData.anns
+        .filter(a => filterByAccess(a) && (a.title.toLowerCase().includes(query) || a.content.toLowerCase().includes(query)))
+        .slice(0, 4),
+      exams: allData.exams
+        .filter(e => filterByAccess(e) && (e.subject.toLowerCase().includes(query) || e.room.toLowerCase().includes(query)))
+        .slice(0, 4),
+      schedules: allData.schs
+        .filter(s => filterByAccess(s) && (s.category.toLowerCase().includes(query) || s.version.toLowerCase().includes(query)))
+        .slice(0, 4)
+    };
+  }, [searchQuery, allData, user]);
 
   const navItems = useMemo(() => {
     const items = [
@@ -103,7 +117,9 @@ export default function Layout() {
       { to: '/polls', icon: BarChart2, label: 'Consultations' },
       { to: '/profile', icon: UserCircle, label: 'Mon Profil' },
     ];
-    if (user?.role === 'ADMIN') items.push({ to: '/admin', icon: ShieldCheck, label: 'Administration' } as any);
+    if (user?.role === UserRole.ADMIN) {
+      items.push({ to: '/admin', icon: ShieldCheck, label: 'Administration' } as any);
+    }
     return items;
   }, [user?.role]);
 
@@ -217,6 +233,18 @@ export default function Layout() {
                               <button key={exam.id} onClick={() => { setIsSearchOpen(false); navigate('/exams'); }} className="w-full text-left p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group active:scale-[0.98]">
                                 <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{exam.subject}</p>
                                 <p className="text-[9px] text-gray-400 mt-1">Salle {exam.room} • {new Date(exam.date).toLocaleDateString()}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {searchResults.schedules.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">Documents</h4>
+                            {searchResults.schedules.map(sch => (
+                              <button key={sch.id} onClick={() => { setIsSearchOpen(false); navigate('/schedule'); }} className="w-full text-left p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group active:scale-[0.98]">
+                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{sch.category} - {sch.version}</p>
+                                <p className="text-[9px] text-gray-400 mt-1">{sch.className || 'ESP'}</p>
                               </button>
                             ))}
                           </div>

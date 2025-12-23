@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../services/api';
 import { 
-  Clock, MapPin, AlertTriangle, Plus, Trash2, Loader2, Copy, Share2, Pencil, Search, Filter, Sparkles, Calendar as CalendarIcon, ArrowRight
+  Clock, MapPin, AlertTriangle, Plus, Trash2, Loader2, Copy, Share2, Pencil, Search, Filter, Sparkles, Calendar as CalendarIcon, ArrowRight, ChevronDown
 } from 'lucide-react';
 import { UserRole, Exam } from '../types';
 import Modal from '../components/Modal';
@@ -13,6 +13,7 @@ export default function Exams() {
   const { user, adminViewClass } = useAuth();
   const { addNotification } = useNotification();
   const [exams, setExams] = useState<Exam[]>([]);
+  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -28,13 +29,16 @@ export default function Exams() {
     time: '', 
     duration: '', 
     room: '', 
-    notes: '' 
+    notes: '',
+    className: ''
   });
 
   const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   useEffect(() => {
     fetchExams();
+    API.classes.list().then(setClasses);
   }, [user, adminViewClass]);
 
   const fetchExams = async () => {
@@ -55,7 +59,7 @@ export default function Exams() {
       const examDate = new Date(exam.date);
       const target = exam.className || 'Général';
       
-      const matchesClass = user?.role === UserRole.ADMIN 
+      const matchesClass = isAdmin 
         ? (adminViewClass ? (target === adminViewClass || target === 'Général') : true)
         : (target === user?.className || target === 'Général');
       
@@ -68,7 +72,7 @@ export default function Exams() {
 
       return matchesClass && matchesSearch && matchesStatus;
     }).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [user, adminViewClass, exams, searchTerm, statusFilter]);
+  }, [user, adminViewClass, exams, searchTerm, statusFilter, isAdmin]);
 
   const handleCopy = (exam: Exam) => {
     const d = new Date(exam.date);
@@ -102,14 +106,30 @@ export default function Exams() {
 
   const openNewModal = () => {
     setEditingId(null);
-    setFormData({ subject: '', date: '', time: '', duration: '', room: '', notes: '' });
+    setFormData({ 
+      subject: '', 
+      date: '', 
+      time: '', 
+      duration: '', 
+      room: '', 
+      notes: '', 
+      className: isAdmin ? '' : (user?.className || '') 
+    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (exam: Exam) => {
     const d = new Date(exam.date);
     setEditingId(exam.id);
-    setFormData({ subject: exam.subject, date: d.toISOString().split('T')[0], time: d.toTimeString().slice(0, 5), duration: exam.duration, room: exam.room, notes: exam.notes || '' });
+    setFormData({ 
+      subject: exam.subject, 
+      date: d.toISOString().split('T')[0], 
+      time: d.toTimeString().slice(0, 5), 
+      duration: exam.duration, 
+      room: exam.room, 
+      notes: exam.notes || '',
+      className: exam.className
+    });
     setIsModalOpen(true);
   };
 
@@ -118,15 +138,24 @@ export default function Exams() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const targetClass = (user?.role === UserRole.ADMIN && adminViewClass) ? adminViewClass : (user?.className || 'Général');
+      // Forcer la classe cible : celle sélectionnée par l'admin ou celle du délégué
+      const targetClass = isAdmin ? formData.className : (user?.className || 'Général');
       const isoDate = new Date(`${formData.date}T${formData.time}`).toISOString();
-      const payload = { subject: formData.subject, date: isoDate, duration: formData.duration, room: formData.room, notes: formData.notes };
+      const payload = { 
+        subject: formData.subject, 
+        date: isoDate, 
+        duration: formData.duration, 
+        room: formData.room, 
+        notes: formData.notes,
+        className: targetClass 
+      };
+
       if (editingId) {
          await API.exams.update(editingId, payload);
          fetchExams();
          addNotification({ title: 'Succès', message: 'Examen mis à jour.', type: 'success' });
       } else {
-         await API.exams.create({ ...payload, className: targetClass });
+         await API.exams.create(payload);
          fetchExams();
          addNotification({ title: 'Succès', message: 'Examen ajouté.', type: 'success' });
       }
@@ -168,7 +197,7 @@ export default function Exams() {
            <div>
               <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic">Épreuves & DS</h2>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">
-                {user?.role === UserRole.ADMIN && adminViewClass ? adminViewClass : (user?.className || 'Vue Globale')}
+                {isAdmin && adminViewClass ? adminViewClass : (user?.className || 'Vue Globale')}
               </p>
            </div>
         </div>
@@ -295,6 +324,24 @@ export default function Exams() {
             <div className="grid grid-cols-2 gap-4">
               <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" placeholder="Salle" />
               <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="Durée" className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Classe Cible</label>
+              <select 
+                disabled={!isAdmin} 
+                value={formData.className} 
+                onChange={e => setFormData({...formData, className: e.target.value})} 
+                className={`w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                 <option value="">Sélectionner...</option>
+                 <option value="Général">Général (Public)</option>
+                 {isAdmin ? (
+                   classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                 ) : (
+                   <option value={user?.className}>{user?.className}</option>
+                 )}
+              </select>
             </div>
           </div>
 

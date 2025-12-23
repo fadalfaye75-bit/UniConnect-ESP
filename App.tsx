@@ -1,9 +1,11 @@
 
+
 import React, { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { NotificationProvider } from './context/NotificationContext.tsx';
 import { Loader2 } from 'lucide-react';
+import { UserRole } from './types.ts';
 
 // Lazy loaded pages
 const Layout = lazy(() => import('./components/Layout.tsx'));
@@ -39,6 +41,15 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Fix: Made children optional to prevent TypeScript from complaining about missing children 
+// in scenarios where it can't strictly verify them (like with lazy components in Route elements).
+const AdminRoute = ({ children }: { children?: React.ReactNode }) => {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== UserRole.ADMIN) return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
+
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
   
@@ -56,7 +67,14 @@ function AppRoutes() {
           <Route path="meet" element={<Meet />} />
           <Route path="polls" element={<Polls />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="admin" element={<AdminPanel />} />
+          <Route 
+            path="admin" 
+            element={
+              <AdminRoute>
+                <AdminPanel />
+              </AdminRoute>
+            } 
+          />
         </Route>
 
         {/* Fallback route */}

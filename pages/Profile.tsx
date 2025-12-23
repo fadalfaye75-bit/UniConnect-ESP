@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserAvatar } from '../components/Layout';
-import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2 } from 'lucide-react';
+import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive } from 'lucide-react';
 import { Announcement, ScheduleFile } from '../types';
 
 const THEME_COLORS = [
@@ -53,7 +53,6 @@ export default function Profile() {
       const schIds = favs.filter(f => f.content_type === 'schedule').map(f => f.content_id);
 
       // Pour simplifier on récupère tout le flux et on filtre localement
-      // Dans une prod réelle, on ferait un endpoint dédié via SQL RPC
       const [allAnns, allSchs] = await Promise.all([
         API.announcements.list(0, 1000),
         API.schedules.list()
@@ -221,7 +220,7 @@ export default function Profile() {
               <form onSubmit={handlePasswordChange} className="space-y-6">
                   <input required type="password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none" placeholder="Nouveau mot de passe" />
                   <input required type="password" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none" placeholder="Confirmer" />
-                  <button type="submit" disabled={loading} className="bg-gray-900 dark:bg-gray-700 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 uppercase tracking-widest active:scale-95">
+                  <button type="submit" disabled={loading} className="bg-gray-900 dark:bg-gray-700 text-white px-8 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2 uppercase tracking-widest active:scale-95 w-full sm:w-auto">
                     {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />} Modifier
                   </button>
               </form>
@@ -238,13 +237,17 @@ export default function Profile() {
            ) : (
              <>
                <section className="space-y-6">
-                 <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] px-4 flex items-center gap-3 italic">
-                    <Megaphone size={18} style={{ color: personalInfo.themeColor }} /> Annonces Sauvegardées
-                 </h3>
+                 <div className="flex items-center justify-between px-4">
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] flex items-center gap-3 italic">
+                        <Megaphone size={18} style={{ color: personalInfo.themeColor }} /> Annonces Sauvegardées
+                    </h3>
+                    <span className="text-[10px] font-black px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 uppercase tracking-widest">{favoriteItems.announcements.length} éléments</span>
+                 </div>
+                 
                  <div className="grid gap-4">
                     {favoriteItems.announcements.length > 0 ? favoriteItems.announcements.map(ann => (
                       <div key={ann.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 flex items-center gap-6 group hover:border-amber-400 transition-all">
-                        <div className="w-14 h-14 bg-gray-50 dark:bg-gray-700 rounded-2xl flex items-center justify-center font-black text-lg text-gray-400">
+                        <div className="w-14 h-14 bg-gray-50 dark:bg-gray-700 rounded-2xl flex items-center justify-center font-black text-lg text-gray-400 shrink-0">
                           {ann.author.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -252,12 +255,13 @@ export default function Profile() {
                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-widest">{new Date(ann.date).toLocaleDateString()}</p>
                         </div>
                         <div className="flex gap-2">
-                           <button onClick={() => window.location.href = '#/announcements'} className="p-3 text-gray-400 hover:text-primary-500 transition-all"><ExternalLink size={18}/></button>
-                           <button onClick={() => handleRemoveFavorite(ann.id, 'announcement')} className="p-3 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={18}/></button>
+                           <button onClick={() => window.location.href = '#/announcements'} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-xl transition-all" title="Voir l'annonce"><ExternalLink size={18}/></button>
+                           <button onClick={() => handleRemoveFavorite(ann.id, 'announcement')} className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Retirer des favoris"><Trash2 size={18}/></button>
                         </div>
                       </div>
                     )) : (
-                      <div className="py-10 text-center bg-gray-50 dark:bg-gray-800/50 rounded-[2rem] border-2 border-dashed border-gray-100 dark:border-gray-700">
+                      <div className="py-20 text-center bg-gray-50/50 dark:bg-gray-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
+                         <StarOff size={32} className="mx-auto text-gray-300 mb-4" />
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Aucune annonce marquée</p>
                       </div>
                     )}
@@ -265,26 +269,31 @@ export default function Profile() {
                </section>
 
                <section className="space-y-6">
-                 <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] px-4 flex items-center gap-3 italic">
-                    <FileText size={18} style={{ color: personalInfo.themeColor }} /> Documents Archivés
-                 </h3>
+                 <div className="flex items-center justify-between px-4">
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] flex items-center gap-3 italic">
+                        <FileText size={18} style={{ color: personalInfo.themeColor }} /> Emplois du Temps & Docs
+                    </h3>
+                    <span className="text-[10px] font-black px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 uppercase tracking-widest">{favoriteItems.schedules.length} éléments</span>
+                 </div>
+
                  <div className="grid gap-4">
                     {favoriteItems.schedules.length > 0 ? favoriteItems.schedules.map(sch => (
-                      <div key={sch.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 flex items-center gap-6 group hover:border-amber-400 transition-all">
-                        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-2xl flex items-center justify-center">
+                      <div key={sch.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 flex items-center gap-6 group hover:border-emerald-400 transition-all">
+                        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0">
                           <FileText size={24} />
                         </div>
                         <div className="flex-1 min-w-0">
-                           <h4 className="font-black italic text-gray-900 dark:text-white truncate">Session {sch.version} - {sch.category}</h4>
+                           <h4 className="font-black italic text-gray-900 dark:text-white truncate">{sch.category} - {sch.version}</h4>
                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-widest">{sch.className || 'ESP Global'}</p>
                         </div>
                         <div className="flex gap-2">
-                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-3 text-gray-400 hover:text-emerald-500 transition-all"><ExternalLink size={18}/></a>
-                           <button onClick={() => handleRemoveFavorite(sch.id, 'schedule')} className="p-3 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={18}/></button>
+                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-3 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all" title="Ouvrir le document"><ExternalLink size={18}/></a>
+                           <button onClick={() => handleRemoveFavorite(sch.id, 'schedule')} className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Retirer des favoris"><Trash2 size={18}/></button>
                         </div>
                       </div>
                     )) : (
-                      <div className="py-10 text-center bg-gray-50 dark:bg-gray-800/50 rounded-[2rem] border-2 border-dashed border-gray-100 dark:border-gray-700">
+                      <div className="py-20 text-center bg-gray-50/50 dark:bg-gray-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
+                         <Archive size={32} className="mx-auto text-gray-300 mb-4" />
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Aucun document marqué</p>
                       </div>
                     )}
