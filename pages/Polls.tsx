@@ -58,9 +58,6 @@ export default function Polls() {
   const displayedPolls = useMemo(() => {
     const now = new Date();
     return polls.filter(poll => {
-      // VISIBILITY LOGIC REINFORCEMENT
-      // Règle : Les étudiants ne voient QUE leur classe ou le flux Général.
-      // Les admins voient tout. Les délégués voient leur classe, général, ou tout si adminViewClass est actif.
       const target = (poll.className || 'Général').toLowerCase().trim();
       const userClass = (user?.className || '').toLowerCase().trim();
       
@@ -137,8 +134,25 @@ export default function Polls() {
     }
   };
 
+  const handleTogglePollStatus = async (poll: Poll) => {
+    if (!canManage) return;
+    try {
+      const nextStatus = !poll.isActive;
+      await API.polls.update(poll.id, { isActive: nextStatus });
+      addNotification({ 
+        title: nextStatus ? 'Scrutin réouvert' : 'Scrutin clôturé', 
+        message: `Le sondage est désormais ${nextStatus ? 'ouvert' : 'fermé'}.`, 
+        type: 'success' 
+      });
+      // Update local state for immediate feedback
+      setPolls(prev => prev.map(p => p.id === poll.id ? { ...p, isActive: nextStatus } : p));
+    } catch (error: any) {
+      addNotification({ title: 'Erreur', message: 'Action échouée.', type: 'alert' });
+    }
+  };
+
   const handleRelay = async (poll: Poll) => {
-    const structuredContent = `🗳️ *UniConnect - Consultation Étudiante*\n\n❓ *Question:* ${poll.question}\n\n📌 *Classe:* ${poll.className || 'ESP Global'}\n📊 *Statut:* Vote Ouvert\n\n📢 Votre avis compte pour la prise de décision. Vient voter directement sur le portail UniConnect !\n\n_Diffusé par le bureau des délégués_`;
+    const structuredContent = `🗳️ *UniConnect - Consultation Étudiante*\n\n❓ *Question:* ${poll.question}\n\n📌 *Classe:* ${poll.className || 'ESP Global'}\n📊 *Statut:* ${poll.isActive ? 'Vote Ouvert' : 'Clôturé'}\n\n📢 Votre avis compte. Vient voter sur UniConnect !\n\n_Diffusé par le bureau des délégués_`;
 
     try {
       if (navigator.share) {
@@ -148,7 +162,7 @@ export default function Polls() {
         });
       } else {
         await navigator.clipboard.writeText(structuredContent);
-        addNotification({ title: 'Contenu copié', message: 'Message de consultation prêt pour diffusion.', type: 'success' });
+        addNotification({ title: 'Contenu copié', message: 'Message prêt pour diffusion.', type: 'success' });
       }
       await API.interactions.incrementShare('polls', poll.id);
     } catch (e) {
@@ -158,21 +172,6 @@ export default function Polls() {
 
   const toggleExpand = (pollId: string) => {
     setExpandedPollId(expandedPollId === pollId ? null : pollId);
-  };
-
-  const handleTogglePollStatus = async (poll: Poll) => {
-    if (!canManage) return;
-    try {
-      await API.polls.update(poll.id, { isActive: !poll.isActive });
-      addNotification({ 
-        title: poll.isActive ? 'Scrutin clôturé' : 'Scrutin réouvert', 
-        message: `Le sondage est désormais ${poll.isActive ? 'fermé' : 'ouvert'}.`, 
-        type: 'success' 
-      });
-      fetchPolls(false);
-    } catch (error: any) {
-      addNotification({ title: 'Erreur', message: 'Action échouée.', type: 'alert' });
-    }
   };
 
   const handleDeletePoll = async (poll: Poll) => {
@@ -190,14 +189,16 @@ export default function Polls() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const targetClass = (user?.role === UserRole.ADMIN && adminViewClass) ? adminViewClass : (user?.className || 'Général');
       await API.polls.create({
         question: newPoll.question,
-        className: newPoll.className,
+        className: targetClass,
         options: newPoll.options.filter(o => o.trim() !== '').map(o => ({ label: o })),
         startTime: newPoll.startTime,
         endTime: newPoll.endTime
       });
       setIsModalOpen(false);
+      setNewPoll({ question: '', className: '', options: ['', ''], startTime: '', endTime: '' });
       addNotification({ title: 'Sondage publié', message: 'La consultation est ouverte.', type: 'success' });
       fetchPolls(false);
     } catch (error: any) {
@@ -252,6 +253,7 @@ export default function Polls() {
       <div className="grid gap-8">
         {displayedPolls.map(poll => {
             const now = new Date();
+            const createdDate = new Date(poll.createdAt);
             const pollStart = poll.startTime ? new Date(poll.startTime) : null;
             const pollEnd = poll.endTime ? new Date(poll.endTime) : null;
             const isActuallyActive = poll.isActive && (!pollStart || now >= pollStart) && (!pollEnd || now <= pollEnd);
@@ -267,12 +269,11 @@ export default function Polls() {
                 }`}
                 style={isExpanded ? { borderColor: themeColor } : {}}
               >
-                {/* Visual Accent */}
-                <div className={`absolute top-0 left-0 w-3 h-full ${isActuallyActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                <div className={`absolute top-0 left-0 w-3 h-full transition-colors duration-500 ${isActuallyActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
 
                 <div className="flex flex-wrap justify-between items-start mb-10 gap-6">
                    <div className="flex flex-wrap gap-3">
-                      <div className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm ${isActuallyActive ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                      <div className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors ${isActuallyActive ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                         {isActuallyActive ? <><Radio className="animate-pulse" size={16} /> Scrutin Ouvert</> : <><Lock size={16} /> Vote Clôturé</>}
                       </div>
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-gray-800 px-6 py-3 rounded-full border border-gray-100 dark:border-gray-800">
@@ -342,7 +343,6 @@ export default function Polls() {
                             } ${!canVote ? 'cursor-default' : 'hover:translate-x-2 active:scale-95'}`}
                             style={isSelected ? { borderColor: themeColor } : {}}
                           >
-                             {/* Progress Bar with Gradient */}
                              <div 
                                 className={`absolute left-0 top-0 bottom-0 transition-all duration-1000 ease-out opacity-20`} 
                                 style={{ 
@@ -391,6 +391,13 @@ export default function Polls() {
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800 flex items-center gap-2 opacity-50">
+                    <Calendar size={14} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                        Ouvert le {createdDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', '')}
+                    </span>
                 </div>
 
                 {isExpanded && (
@@ -442,6 +449,16 @@ export default function Polls() {
         <form onSubmit={handleCreatePoll} className="space-y-8">
           <div>
             <textarea required rows={4} value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full px-8 py-6 rounded-[2rem] border-none bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-black italic outline-none focus:ring-4 transition-all text-xl" placeholder="Objet de la décision..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Début (Optionnel)</label>
+                <input type="datetime-local" value={newPoll.startTime} onChange={e => setNewPoll({...newPoll, startTime: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold outline-none border-none text-xs" />
+             </div>
+             <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Fin (Optionnel)</label>
+                <input type="datetime-local" value={newPoll.endTime} onChange={e => setNewPoll({...newPoll, endTime: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold outline-none border-none text-xs" />
+             </div>
           </div>
           <button type="submit" disabled={submitting} className="w-full text-white font-black py-6 rounded-[2.5rem] shadow-2xl transition-all flex justify-center items-center gap-4 uppercase tracking-widest italic active:scale-95" style={{ backgroundColor: themeColor }}>
             {submitting ? <Loader2 className="animate-spin" /> : <Vote size={28} />}
