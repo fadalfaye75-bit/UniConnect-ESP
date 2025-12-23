@@ -41,7 +41,7 @@ export default function Announcements() {
   const [attachmentFilter, setAttachmentFilter] = useState<boolean>(false);
 
   const isAdmin = user?.role === UserRole.ADMIN;
-  const canCreate = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const canCreateAtAll = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
 
   const availableClassOptions = useMemo(() => {
     if (isAdmin) return classes;
@@ -171,7 +171,7 @@ export default function Announcements() {
   if (loading) return (
     <div className="flex flex-col justify-center items-center h-full gap-4">
         <Loader2 className="animate-spin" style={{ color: themeColor }} size={40} />
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">Synchronisation...</p>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">Chargement du flux...</p>
     </div>
   );
 
@@ -188,7 +188,7 @@ export default function Announcements() {
            </div>
         </div>
         
-        {canCreate && (
+        {canCreateAtAll && (
           <button 
             onClick={() => { setEditingId(null); setNewAnn({ title: '', content: '', priority: 'normal', className: isAdmin ? '' : (user?.className || ''), links: [], attachments: [] }); setIsModalOpen(true); }} 
             className="w-full sm:w-auto flex items-center justify-center gap-3 text-white px-10 py-5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all italic"
@@ -282,10 +282,10 @@ export default function Announcements() {
                  <button onClick={() => handleToggleFavorite(ann.id)} className={`p-3.5 rounded-2xl border transition-all ${isFavorite ? 'bg-amber-50 border-amber-200 text-amber-500' : 'bg-gray-50 text-gray-400 hover:text-amber-500'}`}><Bookmark size={20} className={isFavorite ? 'fill-current' : ''}/></button>
                  <button onClick={() => handleToggleRead(ann.id)} className={`p-3.5 rounded-2xl border transition-all ${isRead ? 'bg-emerald-50 border-emerald-200 text-emerald-500' : 'bg-gray-50 text-gray-400 hover:text-emerald-500'}`}><Eye size={20}/></button>
                  {canModify && (
-                   <>
+                   <div className="flex md:flex-col gap-2">
                       <button onClick={() => { setEditingId(ann.id); setNewAnn({ ...ann, className: ann.className || '' }); setIsModalOpen(true); }} className="p-3.5 bg-blue-50 text-blue-500 rounded-2xl hover:bg-blue-500 hover:text-white transition-all"><Pencil size={20}/></button>
                       <button onClick={() => setDeleteConfirmId(ann.id)} className="p-3.5 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={20}/></button>
-                   </>
+                   </div>
                  )}
               </div>
             </div>
