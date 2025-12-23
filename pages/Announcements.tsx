@@ -7,11 +7,44 @@ import {
   Megaphone, Search, X, Link as LinkIcon, Paperclip, 
   Globe2, Trash, FileText, Image as ImageIcon,
   CheckCircle2, Bookmark, Eye, AlertTriangle, 
-  FileSpreadsheet, ClipboardList, Check
+  FileSpreadsheet, ClipboardList, Check, ArrowRight, Maximize2,
+  Calendar, User as UserIcon, Hash
 } from 'lucide-react';
 import { UserRole, Announcement, AnnouncementPriority, ExternalLink as ExtLinkType } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
+
+// Simple parser for "structured" content
+const StructuredContent = ({ content }: { content: string }) => {
+  const lines = content.split('\n');
+  return (
+    <div className="space-y-4">
+      {lines.map((line, i) => {
+        // Detect lists
+        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+          return (
+            <div key={i} className="flex gap-3 pl-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary-500 mt-2 shrink-0" />
+              <p className="text-gray-700 dark:text-gray-300 italic text-base leading-relaxed">{line.trim().substring(2)}</p>
+            </div>
+          );
+        }
+        // Detect bold (simple implementation)
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return (
+          <p key={i} className="text-gray-700 dark:text-gray-300 italic text-base leading-relaxed min-h-[1.5rem]">
+            {parts.map((part, j) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={j} className="font-black text-gray-900 dark:text-white not-italic">{part.slice(2, -2)}</strong>;
+              }
+              return part;
+            })}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
 
 export default function Announcements() {
   const { user } = useAuth();
@@ -22,8 +55,11 @@ export default function Announcements() {
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingAnn, setViewingAnn] = useState<Announcement | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   
@@ -104,6 +140,13 @@ export default function Announcements() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  const openAnnDetail = (ann: Announcement) => {
+    setViewingAnn(ann);
+    if (!readIds.has(ann.id)) {
+      handleToggleRead(ann.id);
+    }
   };
 
   const handleToggleFavorite = async (id: string) => {
@@ -212,10 +255,13 @@ export default function Announcements() {
       <div className="grid gap-8">
         {displayedAnnouncements.map((ann) => {
           const isUrgent = ann.priority === 'urgent';
+          const isImportant = ann.priority === 'important';
           const isRead = readIds.has(ann.id);
           const isFavorite = favoriteIds.has(ann.id);
           const canModify = isAdmin || ann.user_id === user?.id;
           const annDate = new Date(ann.date);
+          const isLong = ann.content.length > 300;
+          const contentToShow = isLong ? ann.content.substring(0, 300) + '...' : ann.content;
           
           return (
             <div 
@@ -224,10 +270,10 @@ export default function Announcements() {
                 isUrgent ? 'border-rose-100 bg-rose-50/10' : 'border-transparent hover:border-gray-100'
               } ${isRead ? 'opacity-60' : ''}`}
             >
-              <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: isUrgent ? '#f43f5e' : themeColor }} />
+              <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: isUrgent ? '#f43f5e' : isImportant ? '#f59e0b' : themeColor }} />
 
               <div className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50 dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-lg shrink-0">
-                  <span className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: themeColor }}>
+                  <span className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: isUrgent ? '#f43f5e' : isImportant ? '#f59e0b' : themeColor }}>
                     {annDate.toLocaleDateString('fr-FR', {weekday: 'short'})}
                   </span>
                   <span className="text-4xl font-black text-gray-900 dark:text-white italic">{annDate.getDate()}</span>
@@ -239,14 +285,38 @@ export default function Announcements() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                    <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-lg tracking-widest ${
-                      isUrgent ? 'bg-rose-100 text-rose-600' : 'bg-gray-100 text-gray-400'
+                      isUrgent ? 'bg-rose-100 text-rose-600' : isImportant ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'
                    }`}>{ann.priority}</span>
                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Par: {ann.author}</span>
                    <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-lg">{ann.className || 'Général'}</span>
                 </div>
 
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white leading-tight italic tracking-tighter mb-4 group-hover:text-primary-500 transition-colors">{ann.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 italic leading-relaxed text-sm whitespace-pre-wrap mb-8">{ann.content}</p>
+                <h3 
+                  onClick={() => openAnnDetail(ann)}
+                  className="text-2xl font-black text-gray-900 dark:text-white leading-tight italic tracking-tighter mb-4 cursor-pointer hover:text-primary-500 transition-colors group/title"
+                >
+                  {ann.title}
+                  <span className={`ml-3 inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter not-italic align-middle transform group-hover/title:scale-110 transition-transform shadow-sm ${
+                    isUrgent ? 'bg-rose-500 text-white' : 
+                    isImportant ? 'bg-amber-500 text-white' : 
+                    'bg-primary-500 text-white'
+                  }`}>
+                    {ann.priority}
+                  </span>
+                </h3>
+                <div className="relative">
+                  <p className="text-gray-600 dark:text-gray-300 italic leading-relaxed text-sm whitespace-pre-wrap mb-4">
+                    {contentToShow}
+                  </p>
+                  {isLong && (
+                    <button 
+                      onClick={() => openAnnDetail(ann)}
+                      className="text-xs font-black text-primary-500 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all mb-8"
+                    >
+                      Lire la suite <ArrowRight size={14} />
+                    </button>
+                  )}
+                </div>
 
                 <div className="space-y-4">
                   {(ann.links && ann.links.length > 0) && (
@@ -295,7 +365,7 @@ export default function Announcements() {
         )}
       </div>
 
-      {/* Modern Creation Modal */}
+      {/* Creation/Edition Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Éditer l'annonce" : "Diffuser un message"}>
          <form onSubmit={handleFormSubmit} className="space-y-6 max-h-[80vh] custom-scrollbar overflow-y-auto pr-2 px-1">
             <div className="space-y-4">
@@ -328,12 +398,11 @@ export default function Announcements() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Contenu principal</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Contenu principal (**gras**, - liste)</label>
                 <textarea required value={newAnn.content} onChange={e => setNewAnn({...newAnn, content: e.target.value})} rows={4} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-primary-500 transition-all italic" placeholder="Détaillez votre message..." />
               </div>
             </div>
 
-            {/* Link Manager Section */}
             <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -375,7 +444,6 @@ export default function Announcements() {
                </div>
             </div>
 
-            {/* Document Manager Section */}
             <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -408,26 +476,126 @@ export default function Announcements() {
             </div>
 
             <button type="submit" disabled={submitting} className="w-full py-5 rounded-[2.5rem] bg-primary-500 text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary-500/20 active:scale-95 transition-all hover:bg-primary-600 flex items-center justify-center gap-3">
-               {submitting ? <Loader2 className="animate-spin" size={20} /> : (editingId ? <Check size={20} /> : <Check size={20} />)}
-               {submitting ? "Finalisation..." : (editingId ? "Sauvegarder" : "Publier l'Annonce")}
+               {submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+               {submitting ? "Finalisation..." : (editingId ? "Sauvegarder les modifications" : "Publier l'Annonce")}
             </button>
          </form>
       </Modal>
 
-      {/* Confirmation Modal */}
-      <Modal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} title="Retirer cette annonce">
+      {/* Reading View Modal (Detail) */}
+      <Modal isOpen={!!viewingAnn} onClose={() => setViewingAnn(null)} title="Détail de l'annonce">
+         {viewingAnn && (
+           <div className="space-y-8 max-h-[85vh] custom-scrollbar overflow-y-auto pr-4 py-2">
+              <div className="flex flex-col gap-6">
+                 <div className="flex items-center gap-3 flex-wrap">
+                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-sm ${viewingAnn.priority === 'urgent' ? 'bg-rose-100 text-rose-600' : viewingAnn.priority === 'important' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'}`}>
+                      {viewingAnn.priority}
+                    </span>
+                    <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+                      {viewingAnn.className || 'Public'}
+                    </span>
+                 </div>
+                 
+                 <h2 className="text-4xl font-black text-gray-900 dark:text-white leading-tight italic tracking-tighter uppercase">
+                   {viewingAnn.title}
+                   <span className={`ml-4 inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter not-italic align-middle shadow-sm ${
+                    viewingAnn.priority === 'urgent' ? 'bg-rose-500 text-white' : 
+                    viewingAnn.priority === 'important' ? 'bg-amber-500 text-white' : 
+                    'bg-primary-500 text-white'
+                  }`}>
+                    {viewingAnn.priority}
+                  </span>
+                 </h2>
+                 
+                 <div className="grid grid-cols-2 gap-4 border-y border-gray-100 dark:border-gray-700 py-6">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400">
+                          <UserIcon size={18} />
+                       </div>
+                       <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Émetteur</p>
+                          <p className="text-xs font-black text-gray-700 dark:text-gray-300 italic">{viewingAnn.author}</p>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                       <div className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-400">
+                          <Calendar size={18} />
+                       </div>
+                       <div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date de diffusion</p>
+                          <p className="text-xs font-black text-gray-700 dark:text-gray-300 italic">{new Date(viewingAnn.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="bg-gray-50/50 dark:bg-gray-800/20 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800">
+                 <StructuredContent content={viewingAnn.content} />
+              </div>
+
+              {(viewingAnn.links && viewingAnn.links.length > 0) && (
+                <div className="space-y-4 pt-4">
+                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2 px-1">
+                     <Globe2 size={16} className="text-blue-500" /> Actions & Liens Externes
+                   </h4>
+                   <div className="grid sm:grid-cols-2 gap-3">
+                      {viewingAnn.links.map((l, i) => (
+                        <a key={i} href={l.url} target="_blank" rel="noreferrer" className="flex items-center justify-between px-6 py-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 hover:bg-blue-600 hover:text-white transition-all group shadow-sm active:scale-95">
+                           <div className="flex items-center gap-3">
+                              {l.url.includes('forms') ? <ClipboardList size={18} /> : l.url.includes('sheet') ? <FileSpreadsheet size={18} /> : <Hash size={18} />}
+                              <span className="text-xs font-black uppercase tracking-widest">{l.label}</span>
+                           </div>
+                           <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                        </a>
+                      ))}
+                   </div>
+                </div>
+              )}
+
+              {(viewingAnn.attachments && viewingAnn.attachments.length > 0) && (
+                <div className="space-y-4 pt-4">
+                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2 px-1">
+                     <Paperclip size={16} className="text-emerald-500" /> Ressources téléchargeables
+                   </h4>
+                   <div className="grid sm:grid-cols-2 gap-3">
+                      {viewingAnn.attachments.map((a, i) => (
+                        <div key={i} className="flex items-center gap-4 p-5 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 shadow-sm group cursor-pointer hover:bg-white transition-all">
+                           <div className="p-3 bg-white dark:bg-emerald-800 rounded-xl text-emerald-500 shadow-sm">
+                             {a.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? <ImageIcon size={20} /> : <FileText size={20} />}
+                           </div>
+                           <span className="text-xs font-black uppercase tracking-widest text-emerald-600 truncate">{a}</span>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+              )}
+
+              <div className="pt-8 flex gap-3 sticky bottom-0 bg-white dark:bg-gray-800 pb-2">
+                 <button onClick={() => { if(navigator.share) navigator.share({title: viewingAnn.title, text: viewingAnn.content}); }} className="flex-1 flex items-center justify-center gap-3 py-5 bg-gray-900 text-white rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-2xl active:scale-95 transition-all">
+                    <Share2 size={18} /> Partager l'information
+                 </button>
+                 <button onClick={() => { handleToggleFavorite(viewingAnn.id); }} className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all border-2 ${favoriteIds.has(viewingAnn.id) ? 'bg-amber-50 border-amber-200 text-amber-500' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-400 hover:text-amber-500'}`}>
+                    <Bookmark size={18} className={favoriteIds.has(viewingAnn.id) ? 'fill-current' : ''} /> {favoriteIds.has(viewingAnn.id) ? "Retirer favori" : "Sauvegarder"}
+                 </button>
+              </div>
+           </div>
+         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} title="Confirmer le retrait">
          <div className="text-center space-y-6">
             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
                <AlertTriangle size={40} />
             </div>
             <div className="space-y-2 px-4">
-              <h4 className="text-lg font-black italic text-gray-900 dark:text-white">Confirmer la suppression</h4>
-              <p className="text-sm font-bold text-gray-500 dark:text-gray-400 italic">Cette action est irréversible. L'annonce sera retirée pour tous les membres.</p>
+              <h4 className="text-lg font-black italic text-gray-900 dark:text-white">Action Irréversible</h4>
+              <p className="text-sm font-bold text-gray-500 dark:text-gray-400 italic">Souhaitez-vous vraiment supprimer cette annonce ? Elle disparaîtra pour tous les membres du portail.</p>
             </div>
             <div className="flex gap-3">
                <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-black text-[10px] uppercase tracking-widest text-gray-400">Conserver</button>
                <button onClick={handleConfirmDelete} disabled={submitting} className="flex-1 py-4 rounded-2xl bg-red-500 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center">
-                 {submitting ? <Loader2 className="animate-spin" size={16}/> : "Confirmer"}
+                 {submitting ? <Loader2 className="animate-spin" size={16}/> : "Confirmer la suppression"}
                </button>
             </div>
          </div>

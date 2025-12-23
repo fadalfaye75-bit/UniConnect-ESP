@@ -1,6 +1,6 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { AppNotification } from '../types';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { AppNotification, Exam } from '../types';
 import { useAuth } from './AuthContext';
 import { API } from '../services/api';
 
@@ -21,15 +21,56 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const notifiedExamsRef = useRef<Set<string>>(new Set());
 
-  const triggerBrowserNotification = useCallback((title: string, message: string) => {
+  const triggerBrowserNotification = useCallback((title: string, message: string, options?: NotificationOptions) => {
     if (Notification.permission === 'granted') {
-      new Notification(title, {
-        body: message,
-        icon: '/favicon.ico' // Optionnel: ajouter un logo ESP si disponible
-      });
+      try {
+        const n = new Notification(title, {
+          body: message,
+          icon: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', // Icône générique éducation
+          badge: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+          ...options
+        });
+        
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch (e) {
+        console.warn("Failed to trigger native notification", e);
+      }
     }
   }, []);
+
+  const checkImminentExams = useCallback(async () => {
+    if (!user) return;
+    try {
+      const exams = await API.exams.list();
+      const now = new Date();
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      
+      const imminentExams = exams.filter(exam => {
+        const examDate = new Date(exam.date);
+        const targetClass = exam.className || 'Général';
+        const isForUser = targetClass === 'Général' || targetClass === user.className;
+        
+        return isForUser && examDate > now && examDate <= tomorrow && !notifiedExamsRef.current.has(exam.id);
+      });
+
+      imminentExams.forEach(exam => {
+        const timeStr = new Date(exam.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        triggerBrowserNotification(
+          "📚 Examen Imminent !",
+          `Rappel : Ton épreuve de ${exam.subject} commence demain à ${timeStr} en salle ${exam.room}.`,
+          { tag: `exam-${exam.id}` }
+        );
+        notifiedExamsRef.current.add(exam.id);
+      });
+    } catch (e) {
+      console.warn("Failed to check imminent exams");
+    }
+  }, [user, triggerBrowserNotification]);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -50,16 +91,20 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   useEffect(() => {
     if (!user) {
       setNotifications([]);
+      notifiedExamsRef.current = new Set();
       return;
     }
 
     fetchNotifications();
+    checkImminentExams();
 
-    // Souscription temps réel
-    const subscription = API.notifications.subscribe(user.id, (payload) => {
+    // Vérification périodique des examens imminents (toutes les heures)
+    const examCheckInterval = setInterval(checkImminentExams, 3600000);
+
+    // Souscription temps réel pour les nouvelles annonces/votes/etc
+    const subscription = API.notifications.subscribe(user.id, (payload: any) => {
       const newNotif = payload.new;
       
-      // Vérifier si la notification concerne l'utilisateur
       const isTargeted = 
         !newNotif.target_user_id || newNotif.target_user_id === user.id ||
         newNotif.target_role === user.role ||
@@ -74,13 +119,17 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return () => {
       subscription.unsubscribe();
+      clearInterval(examCheckInterval);
     };
-  }, [user, fetchNotifications, triggerBrowserNotification]);
+  }, [user, fetchNotifications, triggerBrowserNotification, checkImminentExams]);
 
   const requestPermission = async () => {
     if (!("Notification" in window)) return;
     const result = await Notification.requestPermission();
     setPermission(result);
+    if (result === 'granted') {
+      triggerBrowserNotification("UniConnect ESP", "Les notifications push sont maintenant activées !");
+    }
   };
 
   const addNotification = async (notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {

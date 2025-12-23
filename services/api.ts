@@ -426,17 +426,30 @@ export const API = {
       }));
     },
     add: async (notif: any) => {
-      const { error } = await supabase.from('notifications').insert({ 
+      const data: any = { 
         title: notif.title,
         message: notif.message,
         type: notif.type,
-        link: notif.link,
         target_role: notif.targetRole,
         target_class: notif.targetClass,
         target_user_id: notif.targetUserId,
         timestamp: new Date().toISOString(), 
         is_read: false 
-      });
+      };
+      
+      if (notif.link) data.link = notif.link;
+
+      const { error } = await supabase.from('notifications').insert(data);
+      
+      // Fallback: Si la colonne 'link' est manquante dans le cache (PGRST204), on réessaie sans elle.
+      if (error && error.code === 'PGRST204' && data.link) {
+        console.warn("Retrying notification without 'link' column due to schema cache mismatch.");
+        const { link, ...dataWithoutLink } = data;
+        const { error: retryError } = await supabase.from('notifications').insert(dataWithoutLink);
+        if (retryError) handleAPIError(retryError, "Échec envoi notification (retry)");
+        return;
+      }
+
       if (error) handleAPIError(error, "Échec envoi notification");
     },
     markRead: async (id: string) => {

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../services/api';
 import { Announcement, Exam, UserRole, Poll, MeetLink } from '../types';
-import { Clock, FileText, GraduationCap, Loader2, ChevronRight, BarChart2, Calendar, Video, Settings, ArrowRight, User as UserIcon, Sparkles, Megaphone, Radio, Zap, TrendingUp, CheckCircle2, MapPin, BellRing, ShieldCheck } from 'lucide-react';
+import { Clock, FileText, GraduationCap, Loader2, ChevronRight, BarChart2, Calendar, Video, Settings, ArrowRight, User as UserIcon, Sparkles, Megaphone, Radio, Zap, TrendingUp, CheckCircle2, MapPin, BellRing, ShieldCheck, BellOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
 
@@ -107,7 +107,7 @@ export default function Dashboard() {
              </div>
           </div>
           
-          {permission === 'default' && (
+          {permission === 'default' ? (
             <button 
               onClick={requestPermission}
               className="flex items-center gap-4 bg-emerald-500 text-white p-6 rounded-[2.5rem] shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all group"
@@ -115,9 +115,25 @@ export default function Dashboard() {
               <BellRing size={24} className="animate-bounce" />
               <div className="text-left">
                  <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Alertes Campus</p>
-                 <span className="text-sm font-black italic">Activer les Notifications</span>
+                 <span className="text-sm font-black italic">Activer les Notifications Push</span>
               </div>
             </button>
+          ) : permission === 'denied' ? (
+            <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-800 text-gray-400 p-6 rounded-[2.5rem] border border-gray-200 dark:border-gray-700">
+              <BellOff size={24} />
+              <div className="text-left">
+                 <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Alertes Désactivées</p>
+                 <span className="text-sm font-black italic">Activez dans les réglages navigateur</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 bg-primary-50 dark:bg-primary-900/10 text-primary-500 p-6 rounded-[2.5rem] border border-primary-100 dark:border-primary-800 shadow-sm">
+              <CheckCircle2 size={24} />
+              <div className="text-left">
+                 <p className="text-[10px] font-black uppercase tracking-widest leading-none mb-1">Système de Push</p>
+                 <span className="text-sm font-black italic">Notifications Actives</span>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -164,16 +180,25 @@ export default function Dashboard() {
                   <div key={ann.id} onClick={() => navigate('/announcements')} className="group relative bg-white dark:bg-gray-900 p-8 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl hover:-translate-y-1 cursor-pointer flex flex-col md:flex-row gap-6">
                     <div 
                       className="absolute top-0 left-0 w-2 h-full rounded-l-[3rem]"
-                      style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : themeColor }}
+                      style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : ann.priority === 'important' ? '#f59e0b' : themeColor }}
                     ></div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-4">
                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md tracking-widest ${
-                           ann.priority === 'urgent' ? 'bg-rose-100 text-rose-600' : 'bg-gray-100 text-gray-500'
+                           ann.priority === 'urgent' ? 'bg-rose-100 text-rose-600' : ann.priority === 'important' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'
                         }`}>{ann.priority}</span>
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Date(ann.date).toLocaleDateString()}</span>
                       </div>
-                      <h4 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter line-clamp-2 leading-tight group-hover:text-primary-500 transition-colors">{ann.title}</h4>
+                      <h4 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter line-clamp-2 leading-tight group-hover:text-primary-500 transition-colors">
+                        {ann.title}
+                        <span className={`ml-3 inline-flex items-center px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-tighter not-italic align-middle ${
+                          ann.priority === 'urgent' ? 'bg-rose-500 text-white' : 
+                          ann.priority === 'important' ? 'bg-amber-500 text-white' : 
+                          'bg-primary-500 text-white'
+                        }`}>
+                          {ann.priority}
+                        </span>
+                      </h4>
                       <p className="text-sm text-gray-500 mt-2 line-clamp-2 italic leading-relaxed">{ann.content}</p>
                     </div>
                     <div className="flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 rounded-3xl group-hover:bg-gray-100 transition-colors">

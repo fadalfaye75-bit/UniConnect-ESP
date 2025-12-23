@@ -4,7 +4,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Megaphone, Calendar, GraduationCap, Video, 
   BarChart2, Search, LogOut, Menu, X, Moon, Sun, 
-  ShieldCheck, UserCircle, Bell, Check, Trash2, Info, AlertTriangle, Settings, Loader2, ArrowRight, Filter, CalendarDays, Clock, CheckCircle2, MessageSquare, School, FileText, ExternalLink
+  ShieldCheck, UserCircle, Bell, Check, Trash2, Info, AlertTriangle, Settings, Loader2, ArrowRight, Filter, CalendarDays, Clock, CheckCircle2, MessageSquare, School, FileText, ExternalLink,
+  CheckCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -257,13 +258,60 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 relative">
-             <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl relative transition-all active:scale-90 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800' : ''}`} ref={notifRef}>
+          <div className="flex items-center gap-4 relative" ref={notifRef}>
+             <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl relative transition-all active:scale-90 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800' : ''}`}>
                <Bell size={24} style={isNotifOpen ? { color: themeColor } : {}} />
                {unreadCount > 0 && (
                  <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-4 ring-white dark:ring-gray-900 animate-pulse"></span>
                )}
              </button>
+
+             {isNotifOpen && (
+               <div className="absolute top-full right-0 mt-4 w-80 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-6 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alertes Campus</h4>
+                      <p className="text-sm font-black italic mt-1">{unreadCount} non lues</p>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllAsRead} className="p-2 text-primary-500 hover:bg-primary-50 rounded-xl transition-all" title="Tout marquer comme lu">
+                        <CheckCheck size={20} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-2">
+                    {notifications.length > 0 ? notifications.map(notif => (
+                      <div key={notif.id} className={`p-4 rounded-2xl flex gap-4 transition-all ${notif.isRead ? 'opacity-60' : 'bg-primary-50/30 dark:bg-primary-900/10'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          notif.type === 'alert' ? 'bg-red-100 text-red-500' : 
+                          notif.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 
+                          'bg-primary-100 text-primary-500'
+                        }`}>
+                          <Bell size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-black text-gray-900 dark:text-white leading-tight italic">{notif.title}</p>
+                          <p className="text-[10px] text-gray-500 line-clamp-2 mt-1 italic">{notif.message}</p>
+                          <p className="text-[8px] font-black text-gray-400 uppercase mt-2 tracking-widest">{new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                        </div>
+                        {!notif.isRead && (
+                          <button onClick={() => markAsRead(notif.id)} className="p-1 text-primary-500 self-start">
+                            <Check size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )) : (
+                      <div className="py-12 text-center opacity-30">
+                        <Bell size={32} className="mx-auto mb-3" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Aucune notification</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 border-t border-gray-50 dark:border-gray-800">
+                    <button onClick={clearNotifications} className="w-full py-3 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] hover:text-red-500 transition-colors">Effacer l'historique</button>
+                  </div>
+               </div>
+             )}
 
              <button onClick={toggleTheme} className="p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90">
                {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
