@@ -39,6 +39,7 @@ export default function Announcements() {
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [classFilter, setClassFilter] = useState<string>('all');
+  const [attachmentFilter, setAttachmentFilter] = useState<boolean>(false);
 
   const canCreate = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
 
@@ -206,9 +207,10 @@ export default function Announcements() {
       const matchesSearch = ann.title.toLowerCase().includes(searchTerm.toLowerCase()) || ann.content.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPriority = priorityFilter === 'all' || ann.priority === priorityFilter;
       const matchesClassFilter = classFilter === 'all' || targetClass === classFilter;
-      return matchesSearch && matchesPriority && matchesClassFilter;
+      const matchesAttachments = !attachmentFilter || (ann.attachments && ann.attachments.length > 0);
+      return matchesSearch && matchesPriority && matchesClassFilter && matchesAttachments;
     });
-  }, [user, announcements, searchTerm, priorityFilter, classFilter]);
+  }, [user, announcements, searchTerm, priorityFilter, classFilter, attachmentFilter]);
 
   if (loading) return (
     <div className="flex flex-col justify-center items-center h-full gap-4">
@@ -256,15 +258,21 @@ export default function Announcements() {
             className="w-full pl-16 pr-6 py-5 bg-transparent border-none rounded-2xl text-sm font-bold outline-none italic"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <button 
+            onClick={() => setAttachmentFilter(!attachmentFilter)}
+            className={`px-6 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer transition-all flex items-center gap-2 ${attachmentFilter ? 'bg-primary-500 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-400'}`}
+          >
+            <Paperclip size={14} /> Pièces jointes
+          </button>
           <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="px-6 py-5 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer">
-             <option value="all">Priorité</option>
+             <option value="all">Priorité (Toutes)</option>
              <option value="urgent">Urgent</option>
              <option value="important">Important</option>
              <option value="normal">Normal</option>
           </select>
           <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className="px-6 py-5 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer">
-             <option value="all">Classe</option>
+             <option value="all">Classe (Toutes)</option>
              <option value="Général">Général</option>
              {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
@@ -272,7 +280,7 @@ export default function Announcements() {
       </div>
 
       <div className="grid gap-8">
-        {displayedAnnouncements.map((ann) => {
+        {displayedAnnouncements.length > 0 ? displayedAnnouncements.map((ann) => {
           const isUrgent = ann.priority === 'urgent';
           const isRead = readIds.has(ann.id);
           const isCopied = copiedId === ann.id;
@@ -310,6 +318,11 @@ export default function Announcements() {
                     <span className="text-[9px] font-black uppercase px-4 py-2 rounded-full bg-gray-900 text-white tracking-widest italic">
                       {ann.className || 'Général'}
                     </span>
+                    {ann.attachments && ann.attachments.length > 0 && (
+                      <span className="text-[9px] font-black uppercase px-4 py-2 rounded-full bg-emerald-100 text-emerald-600 tracking-widest italic flex items-center gap-1.5">
+                        <Paperclip size={10} /> {ann.attachments.length} Pièce(s)
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -377,7 +390,13 @@ export default function Announcements() {
               </div>
             </div>
           );
-        })}
+        }) : (
+          <div className="text-center py-20 bg-white dark:bg-gray-900 rounded-[3.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
+             <FilterX size={48} className="mx-auto text-gray-300 mb-6" />
+             <p className="text-lg font-black text-gray-400 uppercase tracking-widest italic">Aucune annonce ne correspond à vos filtres</p>
+             <button onClick={() => { setSearchTerm(''); setPriorityFilter('all'); setClassFilter('all'); setAttachmentFilter(false); }} className="mt-6 text-[10px] font-black text-primary-500 uppercase tracking-[0.2em] hover:underline">Réinitialiser les filtres</button>
+          </div>
+        )}
       </div>
 
       {/* Modal de Publication/Édition */}
