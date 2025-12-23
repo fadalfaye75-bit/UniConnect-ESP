@@ -1,5 +1,4 @@
 
-
 import React, { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
@@ -41,8 +40,6 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Fix: Made children optional to prevent TypeScript from complaining about missing children 
-// in scenarios where it can't strictly verify them (like with lazy components in Route elements).
 const AdminRoute = ({ children }: { children?: React.ReactNode }) => {
   const { user, isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -88,7 +85,7 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <HashRouter>
+        <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppRoutes />
         </HashRouter>
       </NotificationProvider>
