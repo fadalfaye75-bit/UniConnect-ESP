@@ -29,7 +29,7 @@ export default function Exams() {
     time: '', 
     duration: '', 
     room: '', 
-    notes: '',
+    notes: '', 
     className: ''
   });
 
@@ -84,23 +84,11 @@ export default function Exams() {
   };
 
   const handleRelay = async (exam: Exam) => {
-    const d = new Date(exam.date);
-    const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    const structuredContent = `📝 *PROGRAMME EXAMEN UniConnect*\n\n🎓 *Matière:* ${exam.subject}\n📅 *Date:* ${dateStr}\n⏰ *Heure:* ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 *Salle:* ${exam.room}\n⏱️ *Durée:* ${exam.duration}\n\n🍀 _Bonne chance à tous !_\n_Diffusé via UniConnect ESP_`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `Examen: ${exam.subject}`,
-          text: structuredContent
-        });
-      } else {
-        await navigator.clipboard.writeText(structuredContent);
-        addNotification({ title: 'Contenu copié', message: 'Fiche d\'examen prête à être partagée.', type: 'success' });
-      }
-      await API.interactions.incrementShare('exams', exam.id);
-    } catch (e) {
-      console.debug("Share exam ended", e);
+    const structuredContent = `📝 *PROGRAMME EXAMEN UniConnect*\n\n🎓 Matière: ${exam.subject}\n📅 Date: ${new Date(exam.date).toLocaleDateString()}\n📍 Salle: ${exam.room}\n⏱️ Durée: ${exam.duration}`;
+    if (navigator.share) await navigator.share({ title: exam.subject, text: structuredContent });
+    else {
+      await navigator.clipboard.writeText(structuredContent);
+      addNotification({ title: 'Copié', message: 'Prêt pour partage.', type: 'success' });
     }
   };
 
@@ -135,10 +123,8 @@ export default function Exams() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
     setSubmitting(true);
     try {
-      // Forcer la classe cible : celle sélectionnée par l'admin ou celle du délégué
       const targetClass = isAdmin ? formData.className : (user?.className || 'Général');
       const isoDate = new Date(`${formData.date}T${formData.time}`).toISOString();
       const payload = { 
@@ -150,40 +136,34 @@ export default function Exams() {
         className: targetClass 
       };
 
-      if (editingId) {
-         await API.exams.update(editingId, payload);
-         fetchExams();
-         addNotification({ title: 'Succès', message: 'Examen mis à jour.', type: 'success' });
-      } else {
-         await API.exams.create(payload);
-         fetchExams();
-         addNotification({ title: 'Succès', message: 'Examen ajouté.', type: 'success' });
-      }
+      if (editingId) await API.exams.update(editingId, payload);
+      else await API.exams.create(payload);
+      
+      fetchExams();
       setIsModalOpen(false);
-      setEditingId(null);
-    } catch (error: any) {
-      addNotification({ title: 'Erreur', message: "Opération échouée.", type: 'alert' });
+      addNotification({ title: 'Succès', message: 'Épreuve enregistrée.', type: 'success' });
+    } catch (error) {
+      addNotification({ title: 'Erreur', message: "Échec de l'opération.", type: 'alert' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = async (id: string) => {
     if (!window.confirm('Supprimer cet examen ?')) return;
     try {
       await API.exams.delete(id);
       fetchExams();
       addNotification({ title: 'Supprimé', message: 'L\'examen a été retiré.', type: 'info' });
     } catch (error) {
-        addNotification({ title: 'Erreur', message: "Impossible de supprimer.", type: 'alert' });
+        addNotification({ title: 'Erreur', message: "Action impossible.", type: 'alert' });
     }
   };
 
   if (loading) return (
     <div className="flex flex-col justify-center items-center h-[calc(100vh-200px)] gap-4">
         <Loader2 className="animate-spin text-primary-500" size={40} />
-        <span className="text-xs font-black text-gray-400 uppercase tracking-widest animate-pulse">Synchronisation Calendrier...</span>
+        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Calcul du calendrier...</span>
     </div>
   );
 
@@ -191,33 +171,23 @@ export default function Exams() {
     <div className="max-w-5xl mx-auto space-y-8 pb-24">
       <div className="flex flex-col md:flex-row md:items-center justify-between sticky top-0 bg-gray-50/95 dark:bg-gray-950/95 py-6 z-20 backdrop-blur-md gap-4 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-4">
-           <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-2xl shadow-sm border border-orange-100 dark:border-orange-800">
+           <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-2xl shadow-sm">
               <CalendarIcon size={24} />
            </div>
            <div>
               <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic">Épreuves & DS</h2>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">
-                {isAdmin && adminViewClass ? adminViewClass : (user?.className || 'Vue Globale')}
+                {user?.className || 'Portail Académique'}
               </p>
            </div>
         </div>
 
         <div className="flex flex-1 items-center gap-3 max-w-xl">
            <div className="relative flex-1 group">
-             <Search className="absolute left-4 top-3 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={18} />
-             <input 
-                type="text" 
-                placeholder="Matière, salle..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 focus:border-primary-300 transition-all"
-             />
+             <Search className="absolute left-4 top-3 text-gray-400" size={18} />
+             <input type="text" placeholder="Matière, salle..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-sm outline-none transition-all" />
            </div>
-           <select 
-             value={statusFilter}
-             onChange={e => setStatusFilter(e.target.value as any)}
-             className="px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-xs font-black text-gray-600 dark:text-gray-300 outline-none cursor-pointer uppercase tracking-widest focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10"
-           >
+           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl text-xs font-black uppercase tracking-widest outline-none">
               <option value="upcoming">À venir</option>
               <option value="passed">Archives</option>
               <option value="all">Tout</option>
@@ -225,8 +195,8 @@ export default function Exams() {
         </div>
 
         {canManage && (
-          <button onClick={openNewModal} className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl shadow-primary-500/20 transition-all hover:-translate-y-0.5 active:scale-95 whitespace-nowrap uppercase tracking-widest">
-            <Plus size={18} /> <span className="hidden sm:inline">Nouvelle Épreuve</span>
+          <button onClick={openNewModal} className="bg-primary-500 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl uppercase tracking-widest">
+            <Plus size={18} className="inline mr-2" /> Nouveau
           </button>
         )}
       </div>
@@ -234,72 +204,36 @@ export default function Exams() {
       <div className="grid gap-6">
         {displayedExams.map((exam) => {
           const examDate = new Date(exam.date);
-          const now = new Date();
-          const timeDiff = examDate.getTime() - now.getTime();
-          const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-          const isUrgent = daysDiff >= 0 && daysDiff <= 3;
-          const isPassed = timeDiff < 0;
+          const isPassed = examDate < new Date();
+          const canModify = isAdmin || exam.user_id === user?.id;
           
           return (
-            <div 
-              key={exam.id} 
-              className={`relative bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-soft border transition-all hover:shadow-xl hover:-translate-y-1 group flex flex-col md:flex-row gap-8 ${
-                isUrgent ? 'border-orange-200 dark:border-orange-800/50 bg-gradient-to-br from-white to-orange-50/30' : 'border-gray-100 dark:border-gray-800'
-              }`}
-            >
-              <div className="flex flex-col items-center justify-center w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 flex-shrink-0 group-hover:scale-110 transition-transform">
-                <span className="text-[9px] font-black text-primary-500 uppercase tracking-widest mb-1">
-                  {examDate.toLocaleDateString('fr-FR', {weekday: 'short'}).replace('.', '')}
-                </span>
-                <span className="text-3xl font-black text-gray-900 dark:text-white leading-none">
-                  {examDate.getDate()}
-                </span>
-                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                  {examDate.toLocaleDateString('fr-FR', {month: 'short'}).replace('.', '')}
-                </span>
+            <div key={exam.id} className="relative bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-soft border border-gray-100 dark:border-gray-800 transition-all hover:shadow-xl group flex flex-col md:flex-row gap-8">
+              <div className="flex flex-col items-center justify-center w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shrink-0">
+                <span className="text-[9px] font-black text-primary-500 uppercase tracking-widest mb-1">{examDate.toLocaleDateString('fr-FR', {weekday: 'short'})}</span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white leading-none">{examDate.getDate()}</span>
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">{examDate.toLocaleDateString('fr-FR', {month: 'short'})}</span>
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg border tracking-widest ${
-                    isPassed ? 'bg-gray-100 text-gray-400' : 
-                    isUrgent ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-primary-50 text-primary-600 border-primary-100'
-                  }`}>
-                    {isPassed ? 'Archive' : (isUrgent ? 'Imminent' : 'Plannifié')}
-                  </span>
-                  <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-500 tracking-widest">
-                    {exam.className || 'Général'}
-                  </span>
+                  <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg border tracking-widest ${isPassed ? 'bg-gray-100 text-gray-400' : 'bg-primary-50 text-primary-600'}`}>{isPassed ? 'Archive' : 'À venir'}</span>
+                  <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-800 text-gray-500">{exam.className || 'Général'}</span>
                 </div>
-                
-                <h3 className={`text-2xl font-black tracking-tight italic mb-4 ${isPassed ? 'text-gray-400 line-through' : 'text-gray-900 dark:text-white'}`}>
-                  {exam.subject}
-                </h3>
-
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3 text-xs font-bold text-gray-600 dark:text-gray-400">
-                    <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-primary-500"><Clock size={16} /></div>
-                    <span>{examDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} • {exam.duration}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs font-bold text-gray-600 dark:text-gray-400">
-                    <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-xl text-primary-500"><MapPin size={16} /></div>
-                    <span>Salle {exam.room}</span>
-                  </div>
-                  {isUrgent && !isPassed && (
-                    <div className="flex items-center gap-2 text-orange-600 text-[10px] font-black uppercase italic animate-pulse">
-                      <AlertTriangle size={14} /> J-{daysDiff} restant
-                    </div>
-                  )}
+                <h3 className={`text-2xl font-black italic mb-4 ${isPassed ? 'text-gray-400 line-through' : 'text-gray-900 dark:text-white'}`}>{exam.subject}</h3>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3 text-xs font-bold text-gray-600 dark:text-gray-400"><Clock size={16} /> <span>{examDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} • {exam.duration}</span></div>
+                  <div className="flex items-center gap-3 text-xs font-bold text-gray-600 dark:text-gray-400"><MapPin size={16} /> <span>Salle {exam.room}</span></div>
                 </div>
               </div>
 
-              <div className="flex md:flex-col items-center justify-end gap-2 pt-6 md:pt-0 md:pl-8 border-t md:border-t-0 md:border-l border-gray-50 dark:border-gray-800">
-                <button onClick={() => handleRelay(exam)} className="p-3 text-white bg-gray-900 dark:bg-gray-800 hover:scale-110 rounded-2xl shadow-lg transition-all" title="Relayer Directement"><Share2 size={20} /></button>
-                <button onClick={() => handleCopy(exam)} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-2xl transition-all" title="Copier les détails"><Copy size={20} /></button>
-                {canManage && (
+              <div className="flex md:flex-col items-center justify-center gap-2 pt-6 md:pt-0 md:pl-8 border-t md:border-t-0 md:border-l border-gray-50 dark:border-gray-800">
+                <button onClick={() => handleRelay(exam)} className="p-3 text-white bg-gray-900 rounded-2xl hover:scale-110 transition-all shadow-lg"><Share2 size={20} /></button>
+                <button onClick={() => handleCopy(exam)} className="p-3 text-gray-400 hover:text-primary-500 rounded-2xl transition-all"><Copy size={20} /></button>
+                {canModify && (
                   <>
-                    <button onClick={() => handleEdit(exam)} className="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all"><Pencil size={20} /></button>
-                    <button onClick={(e) => handleDelete(e, exam.id)} className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all"><Trash2 size={20} /></button>
+                    <button onClick={() => handleEdit(exam)} className="p-3 text-gray-400 hover:text-blue-500 rounded-2xl transition-all"><Pencil size={20} /></button>
+                    <button onClick={() => handleDelete(exam.id)} className="p-3 text-gray-400 hover:text-red-500 rounded-2xl transition-all"><Trash2 size={20} /></button>
                   </>
                 )}
               </div>
@@ -308,45 +242,26 @@ export default function Exams() {
         })}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editer l'Épreuve" : "Programmer un examen"}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Editer" : "Programmer"}>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Matière</label>
-              <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none" placeholder="ex: Analyse Mathématique" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
-              <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" placeholder="Salle" />
-              <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="Durée" className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
-            </div>
-
-            <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Classe Cible</label>
-              <select 
-                disabled={!isAdmin} 
-                value={formData.className} 
-                onChange={e => setFormData({...formData, className: e.target.value})} 
-                className={`w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                 <option value="">Sélectionner...</option>
-                 <option value="Général">Général (Public)</option>
-                 {isAdmin ? (
-                   classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
-                 ) : (
-                   <option value={user?.className}>{user?.className}</option>
-                 )}
+          <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Matière" />
+          <div className="grid grid-cols-2 gap-4">
+            <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" />
+            <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Salle" />
+            <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Durée" />
+          </div>
+          <div>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Audience</label>
+              <select disabled={!isAdmin} value={formData.className} onChange={e => setFormData({...formData, className: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-black text-[10px] uppercase outline-none">
+                 <option value="Général">Public</option>
+                 {isAdmin ? classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>) : <option value={user?.className}>{user?.className}</option>}
               </select>
             </div>
-          </div>
-
-          <button type="submit" disabled={submitting} className="w-full bg-primary-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all uppercase tracking-widest">
-            {editingId ? "Sauvegarder" : "Programmer l'épreuve"}
+          <button type="submit" disabled={submitting} className="w-full bg-primary-500 text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest">
+            {editingId ? "Sauvegarder" : "Publier l'épreuve"}
           </button>
         </form>
       </Modal>
