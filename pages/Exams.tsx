@@ -16,6 +16,7 @@ export default function Exams() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const themeColor = user?.themeColor || '#0ea5e9';
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'upcoming' | 'passed' | 'all'>('upcoming');
@@ -218,8 +219,15 @@ export default function Exams() {
               }`}
             >
               <div className="flex flex-col items-center justify-center w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 flex-shrink-0 group-hover:scale-110 transition-transform">
-                <span className="text-[10px] font-black text-primary-500 uppercase tracking-widest mb-1">{examDate.toLocaleDateString('fr-FR', {month: 'short'})}</span>
-                <span className="text-3xl font-black text-gray-900 dark:text-white leading-none">{examDate.getDate()}</span>
+                <span className="text-[9px] font-black text-primary-500 uppercase tracking-widest mb-1">
+                  {examDate.toLocaleDateString('fr-FR', {weekday: 'short'}).replace('.', '')}
+                </span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white leading-none">
+                  {examDate.getDate()}
+                </span>
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                  {examDate.toLocaleDateString('fr-FR', {month: 'short'}).replace('.', '')}
+                </span>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -276,17 +284,17 @@ export default function Exams() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Matière</label>
-              <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none" placeholder="ex: Analyse Mathématique" />
+              <input required type="text" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-bold outline-none" placeholder="ex: Analyse Mathématique" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
-              <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
+              <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
+              <input required type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" placeholder="Salle" />
-              <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="Durée" className="w-full px-5 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
+              <input required type="text" value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" placeholder="Salle" />
+              <input required type="text" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} placeholder="Durée" className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-bold outline-none" />
             </div>
           </div>
 

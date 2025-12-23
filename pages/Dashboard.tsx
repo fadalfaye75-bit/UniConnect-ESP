@@ -194,7 +194,9 @@ export default function Dashboard() {
                 {exams.length > 0 ? exams.map(exam => (
                    <div key={exam.id} onClick={() => navigate('/exams')} className="flex items-center gap-6 group cursor-pointer border-b border-gray-50 dark:border-gray-800 last:border-0 pb-6 last:pb-0">
                       <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-rose-500 text-white rounded-2xl flex flex-col items-center justify-center shadow-lg group-hover:rotate-6 transition-transform shrink-0">
-                          <span className="text-[9px] font-black uppercase tracking-tight">{new Date(exam.date).toLocaleDateString('fr-FR', {month: 'short'})}</span>
+                          <span className="text-[8px] font-black uppercase tracking-tight">
+                            {new Date(exam.date).toLocaleDateString('fr-FR', {weekday: 'short', month: 'short'}).replace('.', '')}
+                          </span>
                           <span className="text-2xl font-black leading-none">{new Date(exam.date).getDate()}</span>
                       </div>
                       <div className="min-w-0">

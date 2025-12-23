@@ -278,6 +278,7 @@ export default function Announcements() {
           const isCopied = copiedId === ann.id;
           const isFavorite = favoriteIds.has(ann.id);
           const canModify = user?.role === UserRole.ADMIN || (user?.role === UserRole.DELEGATE && ann.className === user.className);
+          const annDate = new Date(ann.date);
           
           return (
             <div 
@@ -292,8 +293,15 @@ export default function Announcements() {
               />
 
               <div className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50 dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shrink-0">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{new Date(ann.date).toLocaleDateString('fr-FR', {month: 'short'})}</span>
-                  <span className="text-4xl font-black text-gray-900 dark:text-white leading-none tracking-tighter italic">{new Date(ann.date).getDate()}</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: themeColor }}>
+                    {annDate.toLocaleDateString('fr-FR', {weekday: 'short'}).replace('.', '')}
+                  </span>
+                  <span className="text-4xl font-black text-gray-900 dark:text-white leading-none tracking-tighter italic">
+                    {annDate.getDate()}
+                  </span>
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                    {annDate.toLocaleDateString('fr-FR', {month: 'short'}).replace('.', '')}
+                  </span>
               </div>
               
               <div className="flex-1 min-w-0">
