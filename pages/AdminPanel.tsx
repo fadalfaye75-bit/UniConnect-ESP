@@ -12,14 +12,7 @@ import { UserRole, ClassGroup, ActivityLog, User } from '../types';
 import Modal from '../components/Modal';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
-type TabType = 'dashboard' | 'users' | 'classes' | 'bulk' | 'logs';
-
-interface BulkUser {
-  name: string;
-  email: string;
-  status: 'pending' | 'processing' | 'success' | 'error';
-  error?: string;
-}
+type TabType = 'dashboard' | 'users' | 'classes' | 'logs';
 
 export default function AdminPanel() {
   const { user } = useAuth();
@@ -45,12 +38,6 @@ export default function AdminPanel() {
   const [classFormData, setClassFormData] = useState({ id: '', name: '', email: '' });
   const [isEditClassMode, setIsEditClassMode] = useState(false);
 
-  // Bulk Import
-  const [bulkInput, setBulkInput] = useState('');
-  const [bulkUsers, setBulkUsers] = useState<BulkUser[]>([]);
-  const [bulkTargetClass, setBulkTargetClass] = useState('');
-  const [bulkIsProcessing, setBulkIsProcessing] = useState(false);
-
   useEffect(() => {
     if (user?.role === UserRole.ADMIN) {
       fetchGlobalData();
@@ -73,56 +60,6 @@ export default function AdminPanel() {
     } finally {
         setLoading(false);
     }
-  };
-
-  const handleParseBulk = () => {
-    const lines = bulkInput.split('\n').filter(line => line.trim().length > 0);
-    const parsed: BulkUser[] = lines.map(line => {
-        // Supporte "Nom;Email" ou "Nom Email"
-        const parts = line.includes(';') ? line.split(';') : line.split(',');
-        if (parts.length >= 2) {
-            return { name: parts[0].trim(), email: parts[1].trim(), status: 'pending' };
-        }
-        return { name: line.trim(), email: '', status: 'error', error: 'Format invalide' };
-    });
-    setBulkUsers(parsed);
-  };
-
-  const handleTriggerBulkCreation = async () => {
-    if (!bulkTargetClass) {
-        addNotification({ title: 'Attention', message: 'Veuillez sélectionner une classe cible.', type: 'warning' });
-        return;
-    }
-    
-    setBulkIsProcessing(true);
-    const updatedUsers = [...bulkUsers];
-
-    for (let i = 0; i < updatedUsers.length; i++) {
-        if (updatedUsers[i].status === 'error') continue;
-        
-        updatedUsers[i].status = 'processing';
-        setBulkUsers([...updatedUsers]);
-
-        try {
-            await API.auth.createUser({
-                name: updatedUsers[i].name,
-                email: updatedUsers[i].email,
-                role: UserRole.STUDENT,
-                className: bulkTargetClass
-            });
-            updatedUsers[i].status = 'success';
-        } catch (error: any) {
-            updatedUsers[i].status = 'error';
-            updatedUsers[i].error = error.message;
-        }
-        setBulkUsers([...updatedUsers]);
-        // Petit délai pour l'effet visuel de cascade
-        await new Promise(r => setTimeout(r, 400));
-    }
-
-    setBulkIsProcessing(false);
-    addNotification({ title: 'Opération terminée', message: 'La création des comptes est achevée.', type: 'success' });
-    fetchGlobalData();
   };
 
   const dashboardStats = useMemo(() => {
@@ -268,7 +205,6 @@ export default function AdminPanel() {
                    { id: 'dashboard', icon: LayoutDashboard, label: 'Tableau de Bord' },
                    { id: 'classes', icon: BookOpen, label: 'Classes & Filières' },
                    { id: 'users', icon: Users, label: 'Utilisateurs' },
-                   { id: 'bulk', icon: Zap, label: 'Importation Massive' },
                    { id: 'logs', icon: Activity, label: 'Journal d\'audit' }
                  ].map((tab) => (
                     <button 
@@ -414,96 +350,6 @@ export default function AdminPanel() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'bulk' && (
-                    <div className="space-y-8 animate-in slide-in-from-right-10 duration-500">
-                        <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="p-4 bg-primary-500 text-white rounded-3xl shadow-xl shadow-primary-500/20">
-                                    <Zap size={28} />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter italic">Importation Massive</h3>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Déclenchez la création automatique de comptes</p>
-                                </div>
-                            </div>
-
-                            <div className="grid lg:grid-cols-2 gap-10">
-                                <div className="space-y-6">
-                                    <div>
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Liste des utilisateurs (Format : Nom;Email)</label>
-                                        <textarea 
-                                            rows={10}
-                                            value={bulkInput}
-                                            onChange={(e) => setBulkInput(e.target.value)}
-                                            placeholder="Moussa Ndiaye;moussa@esp.sn&#10;Awa Diop;awa@esp.sn"
-                                            className="w-full p-6 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2rem] font-bold text-sm outline-none focus:border-primary-400 focus:bg-white transition-all italic"
-                                        />
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <select 
-                                            value={bulkTargetClass}
-                                            onChange={(e) => setBulkTargetClass(e.target.value)}
-                                            className="flex-1 px-6 py-4 bg-gray-100 dark:bg-gray-800 border-none rounded-2xl font-black text-xs uppercase tracking-widest outline-none"
-                                        >
-                                            <option value="">Sélectionner une classe</option>
-                                            {classesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                        </select>
-                                        <button 
-                                            onClick={handleParseBulk}
-                                            className="px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all"
-                                        >
-                                            Analyser
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-[2.5rem] p-8 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Prévisualisation ({bulkUsers.length})</h4>
-                                        {bulkUsers.length > 0 && !bulkIsProcessing && (
-                                            <button 
-                                                onClick={handleTriggerBulkCreation}
-                                                className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary-500/20 animate-pulse"
-                                            >
-                                                Lancer le Trigger <Zap size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar max-h-[300px] pr-2">
-                                        {bulkUsers.map((u, i) => (
-                                            <div key={i} className={`flex items-center justify-between p-4 bg-white dark:bg-gray-900 rounded-2xl border ${
-                                                u.status === 'success' ? 'border-green-200 bg-green-50/50' : 
-                                                u.status === 'error' ? 'border-red-200 bg-red-50/50' : 
-                                                'border-gray-100 dark:border-gray-800'
-                                            }`}>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[11px] font-black text-gray-900 dark:text-white truncate max-w-[150px]">{u.name || 'Inconnu'}</span>
-                                                    <span className="text-[9px] font-bold text-gray-400 truncate max-w-[150px]">{u.email || 'Email manquant'}</span>
-                                                </div>
-                                                {/* Fix: Moved title attribute to parent div to avoid Lucide icon type error */}
-                                                <div title={u.status === 'error' ? u.error : undefined}>
-                                                    {u.status === 'pending' && <div className="w-5 h-5 rounded-full border-2 border-gray-100"></div>}
-                                                    {u.status === 'processing' && <Loader2 className="animate-spin text-primary-500" size={18} />}
-                                                    {u.status === 'success' && <CheckCircle2 className="text-green-500" size={18} />}
-                                                    {u.status === 'error' && <AlertTriangle className="text-red-500" size={18} />}
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {bulkUsers.length === 0 && (
-                                            <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-30">
-                                                <FileUp size={48} className="mb-4" />
-                                                <p className="text-[10px] font-black uppercase tracking-widest italic">En attente de données</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 )}

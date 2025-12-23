@@ -3,6 +3,7 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { NotificationProvider } from './context/NotificationContext.tsx';
+import { ChatProvider } from './context/ChatContext.tsx';
 import { Loader2 } from 'lucide-react';
 import { UserRole } from './types.ts';
 
@@ -74,7 +75,6 @@ function AppRoutes() {
           />
         </Route>
 
-        {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -85,9 +85,12 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <AppRoutes />
-        </HashRouter>
+        <ChatProvider>
+          {/* Fix: Removed the 'future' prop from HashRouter as it is not supported by the default HashRouter types in the current environment's react-router-dom version. */}
+          <HashRouter>
+            <AppRoutes />
+          </HashRouter>
+        </ChatProvider>
       </NotificationProvider>
     </AuthProvider>
   );

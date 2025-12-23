@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserAvatar } from '../components/Layout';
-import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive } from 'lucide-react';
+import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin } from 'lucide-react';
 import { Announcement, ScheduleFile } from '../types';
 
 const THEME_COLORS = [
@@ -52,7 +52,6 @@ export default function Profile() {
       const annIds = favs.filter(f => f.content_type === 'announcement').map(f => f.content_id);
       const schIds = favs.filter(f => f.content_type === 'schedule').map(f => f.content_id);
 
-      // Pour simplifier on récupère tout le flux et on filtre localement
       const [allAnns, allSchs] = await Promise.all([
         API.announcements.list(0, 1000),
         API.schedules.list()
@@ -63,7 +62,7 @@ export default function Profile() {
         schedules: allSchs.filter(s => schIds.includes(s.id))
       });
     } catch (e) {
-      console.warn("Failed to fetch favorites details");
+      console.warn("Fav fetch issues");
     } finally {
       setFavLoading(false);
     }
@@ -84,9 +83,9 @@ export default function Profile() {
         schoolName: personalInfo.schoolName,
         themeColor: personalInfo.themeColor
       });
-      addNotification({ title: 'Profil mis à jour', message: 'Vos modifications ont été enregistrées.', type: 'success' });
+      addNotification({ title: 'Succès', message: 'Profil mis à jour.', type: 'success' });
     } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Impossible de mettre à jour.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     } finally {
       setInfoLoading(false);
     }
@@ -100,7 +99,7 @@ export default function Profile() {
       } else {
         setFavoriteItems(prev => ({ ...prev, schedules: prev.schedules.filter(s => s.id !== id) }));
       }
-      addNotification({ title: 'Retiré', message: 'Élément supprimé de vos favoris.', type: 'info' });
+      addNotification({ title: 'Retiré', message: 'Favori supprimé.', type: 'info' });
     } catch (e) {
       addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     }
@@ -109,35 +108,35 @@ export default function Profile() {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwords.newPassword !== passwords.confirmPassword) {
-      addNotification({ title: 'Erreur', message: 'Mots de passe différents.', type: 'alert' });
+      addNotification({ title: 'Attention', message: 'Confirmation incorrecte.', type: 'alert' });
       return;
     }
     setLoading(true);
     try {
       if(user) await API.auth.updatePassword(user.id, passwords.newPassword);
-      addNotification({ title: 'Succès', message: 'Mot de passe modifié.', type: 'success' });
+      addNotification({ title: 'Sécurisé', message: 'Mot de passe modifié.', type: 'success' });
       setPasswords({ newPassword: '', confirmPassword: '' });
     } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Échec de la modification.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Échec de l\'opération.', type: 'alert' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-20">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic">Mon Profil</h2>
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl">
+    <div className="max-w-5xl mx-auto space-y-10 pb-32 animate-fade-in">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-10">
+        <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase">Mon Profil</h2>
+        <div className="flex bg-white dark:bg-gray-800 p-2 rounded-[2rem] shadow-soft border border-gray-50 dark:border-gray-700">
           <button 
             onClick={() => setActiveTab('info')}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'info' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`px-8 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'info' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}
           >
-            Identité
+            Identité & Thème
           </button>
           <button 
             onClick={() => setActiveTab('favorites')}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'favorites' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`px-8 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'favorites' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}
           >
             Mes Favoris
           </button>
@@ -145,156 +144,172 @@ export default function Profile() {
       </div>
 
       {activeTab === 'info' ? (
-        <div className="grid md:grid-cols-3 gap-8 animate-in fade-in duration-500">
-          <div className="md:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-700 p-8 flex flex-col items-center text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-24 opacity-20" style={{ backgroundColor: personalInfo.themeColor }}></div>
-              <div className="relative z-10 mb-6">
+        <div className="grid lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white dark:bg-gray-900 rounded-[3.5rem] shadow-soft border border-gray-100 dark:border-gray-800 p-10 flex flex-col items-center text-center relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-32 opacity-20 transition-all duration-1000 group-hover:h-40" style={{ backgroundColor: personalInfo.themeColor }}></div>
+              <div className="relative z-10 mb-8 transform group-hover:scale-105 transition-transform duration-500">
                   <div 
-                    className="w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-black text-white shadow-xl transition-all duration-500"
+                    className="w-36 h-36 rounded-[3rem] flex items-center justify-center text-5xl font-black text-white shadow-2xl border-4 border-white dark:border-gray-900"
                     style={{ backgroundColor: personalInfo.themeColor }}
                   >
                     {user?.name.charAt(0)}
                   </div>
               </div>
-              <h3 className="text-xl font-black text-gray-900 dark:text-white truncate w-full italic leading-tight">{user?.name}</h3>
-              <span className="mt-2 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-700">
-                  {user?.role}
-              </span>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white truncate w-full italic tracking-tighter leading-tight">{user?.name}</h3>
+              <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-primary-500 bg-primary-50 px-4 py-1.5 rounded-full">{user?.role}</p>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 p-6 space-y-4">
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-xl" style={{ color: personalInfo.themeColor }}><Mail size={18} /></div>
-                  <p className="truncate font-bold italic">{user?.email}</p>
+            <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800 p-8 space-y-6">
+              <div className="flex items-center gap-5 text-gray-600 dark:text-gray-400">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-sm" style={{ color: personalInfo.themeColor }}><Mail size={20} /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Contact</p>
+                    <p className="truncate font-bold italic text-sm">{user?.email}</p>
+                  </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-xl" style={{ color: personalInfo.themeColor }}><GraduationCap size={18} /></div>
-                  <p className="font-bold italic">{user?.className}</p>
+              <div className="flex items-center gap-5 text-gray-600 dark:text-gray-400">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-sm" style={{ color: personalInfo.themeColor }}><GraduationCap size={20} /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Section</p>
+                    <p className="font-bold italic text-sm truncate">{user?.className}</p>
+                  </div>
               </div>
             </div>
           </div>
 
-          <div className="md:col-span-2 space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-700 p-8">
-              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 uppercase tracking-widest flex items-center gap-2">
-                <Palette size={20} style={{ color: personalInfo.themeColor }} /> Thème de Filière
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white dark:bg-gray-900 rounded-[3.5rem] shadow-soft border border-gray-100 dark:border-gray-800 p-10">
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-10 uppercase tracking-widest flex items-center gap-3 italic">
+                <Palette size={24} style={{ color: personalInfo.themeColor }} /> Thème Personnalisé
               </h3>
-              <div className="grid grid-cols-4 gap-3 mb-8">
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 mb-12">
                 {THEME_COLORS.map((t) => (
                   <button
                     key={t.color}
                     onClick={() => setPersonalInfo({...personalInfo, themeColor: t.color})}
-                    className={`relative h-14 rounded-2xl transition-all flex items-center justify-center group ${personalInfo.themeColor === t.color ? 'ring-4 ring-offset-2 scale-105' : 'hover:scale-105'}`}
+                    className={`relative h-12 rounded-xl transition-all flex items-center justify-center group ${personalInfo.themeColor === t.color ? 'ring-4 ring-offset-4 ring-gray-100 scale-110 shadow-lg' : 'hover:scale-105 shadow-sm'}`}
                     style={{ backgroundColor: t.color }}
                   >
                     {personalInfo.themeColor === t.color && <Check size={20} className="text-white" />}
-                    <span className="absolute bottom-full mb-2 bg-gray-900 text-white text-[8px] font-black uppercase px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-20">
-                      {t.name}
-                    </span>
                   </button>
                 ))}
               </div>
 
-              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 uppercase tracking-widest flex items-center gap-2">
-                <UserIcon size={20} style={{ color: personalInfo.themeColor }} /> Identité
-              </h3>
-              <form onSubmit={handleInfoChange} className="space-y-6">
-                  <input required value={personalInfo.name} onChange={e => setPersonalInfo({...personalInfo, name: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none focus:ring-4 transition-all" placeholder="Nom Complet" />
-                  <input value={personalInfo.schoolName} onChange={e => setPersonalInfo({...personalInfo, schoolName: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none focus:ring-4 transition-all" placeholder="Établissement" />
+              <form onSubmit={handleInfoChange} className="space-y-8">
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nom d'affichage</label>
+                      <input required value={personalInfo.name} onChange={e => setPersonalInfo({...personalInfo, name: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold italic text-sm outline-none border-none focus:ring-4 focus:ring-primary-50 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Établissement</label>
+                      <input value={personalInfo.schoolName} onChange={e => setPersonalInfo({...personalInfo, schoolName: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold italic text-sm outline-none border-none focus:ring-4 focus:ring-primary-50 transition-all" />
+                    </div>
+                  </div>
                   <button 
                     type="submit" 
                     disabled={infoLoading} 
-                    className="text-white px-8 py-3.5 rounded-2xl font-black shadow-lg flex items-center gap-2 uppercase tracking-widest active:scale-95 transition-all"
-                    style={{ backgroundColor: personalInfo.themeColor, boxShadow: `0 10px 15px -3px ${personalInfo.themeColor}33` }}
+                    className="w-full sm:w-auto text-white px-12 py-5 rounded-[2rem] font-black shadow-2xl flex items-center justify-center gap-3 uppercase tracking-widest italic text-xs active:scale-95 transition-all hover:brightness-110"
+                    style={{ backgroundColor: personalInfo.themeColor, boxShadow: `0 15px 30px -5px ${personalInfo.themeColor}55` }}
                   >
-                    {infoLoading ? <Loader2 className="animate-spin" /> : <Save size={20} />} Enregistrer
+                    {infoLoading ? <Loader2 className="animate-spin" /> : <Save size={20} />} Enregistrer le profil
                   </button>
               </form>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-700 p-8">
-              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 uppercase tracking-widest flex items-center gap-2">
-                <Shield size={20} style={{ color: personalInfo.themeColor }} /> Sécurité
+            <div className="bg-white dark:bg-gray-900 rounded-[3.5rem] shadow-soft border border-gray-100 dark:border-gray-800 p-10">
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-10 uppercase tracking-widest flex items-center gap-3 italic">
+                <Shield size={24} style={{ color: personalInfo.themeColor }} /> Accès & Sécurité
               </h3>
-              <form onSubmit={handlePasswordChange} className="space-y-6">
-                  <input required type="password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none" placeholder="Nouveau mot de passe" />
-                  <input required type="password" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold outline-none" placeholder="Confirmer" />
-                  <button type="submit" disabled={loading} className="bg-gray-900 dark:bg-gray-700 text-white px-8 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2 uppercase tracking-widest active:scale-95 w-full sm:w-auto">
-                    {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />} Modifier
+              <form onSubmit={handlePasswordChange} className="space-y-8">
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nouveau mot de passe</label>
+                      <input required type="password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Confirmer le code</label>
+                      <input required type="password" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={loading} className="w-full sm:w-auto bg-gray-900 dark:bg-black text-white px-12 py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest italic text-xs active:scale-95 transition-all shadow-xl">
+                    {loading ? <Loader2 className="animate-spin" /> : <Lock size={20} />} Mettre à jour la sécurité
                   </button>
               </form>
             </div>
           </div>
         </div>
       ) : (
-        <div className="space-y-10 animate-in slide-in-from-bottom-10 duration-500">
+        <div className="space-y-12 animate-in slide-in-from-bottom-5 duration-700">
            {favLoading ? (
-             <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <Loader2 className="animate-spin text-primary-500" size={40} />
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Récupération de vos favoris...</p>
+             <div className="flex flex-col items-center justify-center py-32 gap-6">
+                <Loader2 className="animate-spin text-amber-500" size={50} />
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse">Indexation des éléments favoris...</p>
              </div>
            ) : (
              <>
-               <section className="space-y-6">
-                 <div className="flex items-center justify-between px-4">
-                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] flex items-center gap-3 italic">
-                        <Megaphone size={18} style={{ color: personalInfo.themeColor }} /> Annonces Sauvegardées
+               <section className="space-y-8">
+                 <div className="flex items-center justify-between px-6">
+                    <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-[0.4em] flex items-center gap-4 italic">
+                        <Megaphone size={18} style={{ color: personalInfo.themeColor }} /> Actualités Épinglées
                     </h3>
-                    <span className="text-[10px] font-black px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 uppercase tracking-widest">{favoriteItems.announcements.length} éléments</span>
+                    <span className="text-[10px] font-black px-4 py-1.5 bg-amber-50 text-amber-600 rounded-full uppercase tracking-widest shadow-sm">{favoriteItems.announcements.length} ARCHIVÉS</span>
                  </div>
                  
-                 <div className="grid gap-4">
+                 <div className="grid gap-6">
                     {favoriteItems.announcements.length > 0 ? favoriteItems.announcements.map(ann => (
-                      <div key={ann.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 flex items-center gap-6 group hover:border-amber-400 transition-all">
-                        <div className="w-14 h-14 bg-gray-50 dark:bg-gray-700 rounded-2xl flex items-center justify-center font-black text-lg text-gray-400 shrink-0">
+                      <div key={ann.id} className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] shadow-soft border-2 border-transparent hover:border-amber-100 transition-all flex items-center gap-10 group overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400 opacity-50" />
+                        <div className="w-20 h-20 bg-gray-50 dark:bg-gray-800 rounded-3xl flex items-center justify-center font-black text-2xl text-gray-300 shrink-0 shadow-inner group-hover:rotate-6 transition-transform">
                           {ann.author.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                           <h4 className="font-black italic text-gray-900 dark:text-white truncate">{ann.title}</h4>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-widest">{new Date(ann.date).toLocaleDateString()}</p>
+                           <h4 className="text-xl font-black italic text-gray-900 dark:text-white truncate group-hover:text-amber-600 transition-colors">{ann.title}</h4>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-2 tracking-[0.2em]">{new Date(ann.date).toLocaleDateString('fr-FR', {day:'numeric', month:'long'})} • PAR {ann.author}</p>
                         </div>
-                        <div className="flex gap-2">
-                           <button onClick={() => window.location.href = '#/announcements'} className="p-3 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-xl transition-all" title="Voir l'annonce"><ExternalLink size={18}/></button>
-                           <button onClick={() => handleRemoveFavorite(ann.id, 'announcement')} className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Retirer des favoris"><Trash2 size={18}/></button>
+                        <div className="flex gap-3 relative z-10">
+                           <button onClick={() => window.location.hash = '#/announcements'} className="p-4 text-gray-400 hover:text-amber-500 bg-gray-50 dark:bg-gray-800 rounded-2xl transition-all shadow-sm active:scale-90"><ExternalLink size={20}/></button>
+                           <button onClick={() => handleRemoveFavorite(ann.id, 'announcement')} className="p-4 text-red-400 hover:text-white hover:bg-red-500 bg-red-50 dark:bg-red-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><Trash2 size={20}/></button>
                         </div>
                       </div>
                     )) : (
-                      <div className="py-20 text-center bg-gray-50/50 dark:bg-gray-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
-                         <StarOff size={32} className="mx-auto text-gray-300 mb-4" />
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Aucune annonce marquée</p>
+                      <div className="py-24 text-center bg-white dark:bg-gray-900 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
+                         <StarOff size={48} className="mx-auto text-gray-100 mb-6" />
+                         <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic">Aucune actualité en favori</p>
                       </div>
                     )}
                  </div>
                </section>
 
-               <section className="space-y-6">
-                 <div className="flex items-center justify-between px-4">
-                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] flex items-center gap-3 italic">
-                        <FileText size={18} style={{ color: personalInfo.themeColor }} /> Emplois du Temps & Docs
+               <section className="space-y-8">
+                 <div className="flex items-center justify-between px-6">
+                    <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-[0.4em] flex items-center gap-4 italic">
+                        <FileText size={18} style={{ color: personalInfo.themeColor }} /> Ressources & Documents
                     </h3>
-                    <span className="text-[10px] font-black px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 uppercase tracking-widest">{favoriteItems.schedules.length} éléments</span>
+                    <span className="text-[10px] font-black px-4 py-1.5 bg-emerald-50 text-emerald-600 rounded-full uppercase tracking-widest shadow-sm">{favoriteItems.schedules.length} DOCUMENTS</span>
                  </div>
 
-                 <div className="grid gap-4">
+                 <div className="grid gap-6">
                     {favoriteItems.schedules.length > 0 ? favoriteItems.schedules.map(sch => (
-                      <div key={sch.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-soft border border-gray-100 dark:border-gray-700 flex items-center gap-6 group hover:border-emerald-400 transition-all">
-                        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0">
-                          <FileText size={24} />
+                      <div key={sch.id} className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] shadow-soft border-2 border-transparent hover:border-emerald-100 transition-all flex items-center gap-10 group overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-400 opacity-50" />
+                        <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-3xl flex items-center justify-center shrink-0 shadow-inner group-hover:-rotate-6 transition-transform">
+                          <FileText size={32} />
                         </div>
                         <div className="flex-1 min-w-0">
-                           <h4 className="font-black italic text-gray-900 dark:text-white truncate">{sch.category} - {sch.version}</h4>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-widest">{sch.className || 'ESP Global'}</p>
+                           <h4 className="text-xl font-black italic text-gray-900 dark:text-white truncate group-hover:text-emerald-600 transition-colors">{sch.category} - {sch.version}</h4>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase mt-2 tracking-[0.2em]">{sch.className || 'ESP Global'} • MIS À JOUR LE {new Date(sch.uploadDate).toLocaleDateString()}</p>
                         </div>
-                        <div className="flex gap-2">
-                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-3 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all" title="Ouvrir le document"><ExternalLink size={18}/></a>
-                           <button onClick={() => handleRemoveFavorite(sch.id, 'schedule')} className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Retirer des favoris"><Trash2 size={18}/></button>
+                        <div className="flex gap-3 relative z-10">
+                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-4 text-emerald-500 hover:text-white hover:bg-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><ExternalLink size={20}/></a>
+                           <button onClick={() => handleRemoveFavorite(sch.id, 'schedule')} className="p-4 text-red-400 hover:text-white hover:bg-red-500 bg-red-50 dark:bg-red-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><Trash2 size={20}/></button>
                         </div>
                       </div>
                     )) : (
-                      <div className="py-20 text-center bg-gray-50/50 dark:bg-gray-800/30 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700">
-                         <Archive size={32} className="mx-auto text-gray-300 mb-4" />
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Aucun document marqué</p>
+                      <div className="py-24 text-center bg-white dark:bg-gray-900 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
+                         <Archive size={48} className="mx-auto text-gray-100 mb-6" />
+                         <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic">Aucun document archivé</p>
                       </div>
                     )}
                  </div>

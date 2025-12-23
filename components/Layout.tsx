@@ -3,14 +3,15 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Megaphone, Calendar, GraduationCap, Video, 
-  BarChart2, Search, LogOut, Menu, X, Moon, Sun, 
-  ShieldCheck, UserCircle, Bell, Check, Trash2, Info, AlertTriangle, Settings, Loader2, ArrowRight, Filter, CalendarDays, Clock, CheckCircle2, MessageSquare, School, FileText, ExternalLink,
+  BarChart2, Search, LogOut, Menu, Moon, Sun, 
+  ShieldCheck, UserCircle, Bell, Check, School, 
   CheckCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserRole } from '../types';
+import GeminiChat from './GeminiChat';
 
 export const UserAvatar = React.memo(({ name, color, className = "w-10 h-10", textClassName = "text-xs" }: { name: string, color?: string, className?: string, textClassName?: string }) => {
   const initials = useMemo(() => {
@@ -41,7 +42,6 @@ export default function Layout() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Cache for search data to make it instant
   const [allData, setAllData] = useState<{anns: any[], exams: any[], schs: any[]}>({anns: [], exams: [], schs: []});
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   
@@ -67,7 +67,6 @@ export default function Layout() {
     setIsSearchOpen(false);
   }, [location]);
 
-  // Prefetch search data once when search is focused
   const prefetchSearchData = useCallback(async () => {
     if (isDataLoaded) return;
     try {
@@ -78,33 +77,22 @@ export default function Layout() {
       ]);
       setAllData({ anns, exams, schs });
       setIsDataLoaded(true);
-    } catch (e) {
-      console.error("Failed to prefetch search data", e);
-    }
+    } catch (e) { console.error(e); }
   }, [isDataLoaded]);
 
-  // Instant local filtering with role-based restrictions
   const searchResults = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (query.length < 2) return { announcements: [], exams: [], schedules: [] };
-
     const filterByAccess = (item: any) => {
       const target = (item.className || item.classname || 'Général').toLowerCase().trim();
       if (user?.role === UserRole.ADMIN) return true;
       const userClass = (user?.className || '').toLowerCase().trim();
-      return target === userClass || target === 'général' || target === 'general';
+      return target === userClass || target === 'général';
     };
-
     return {
-      announcements: allData.anns
-        .filter(a => filterByAccess(a) && (a.title.toLowerCase().includes(query) || a.content.toLowerCase().includes(query)))
-        .slice(0, 4),
-      exams: allData.exams
-        .filter(e => filterByAccess(e) && (e.subject.toLowerCase().includes(query) || e.room.toLowerCase().includes(query)))
-        .slice(0, 4),
-      schedules: allData.schs
-        .filter(s => filterByAccess(s) && (s.category.toLowerCase().includes(query) || s.version.toLowerCase().includes(query)))
-        .slice(0, 4)
+      announcements: allData.anns.filter(a => filterByAccess(a) && (a.title.toLowerCase().includes(query) || a.content.toLowerCase().includes(query))).slice(0, 4),
+      exams: allData.exams.filter(e => filterByAccess(e) && (e.subject.toLowerCase().includes(query))).slice(0, 4),
+      schedules: allData.schs.filter(s => filterByAccess(s) && (s.category.toLowerCase().includes(query))).slice(0, 4)
     };
   }, [searchQuery, allData, user]);
 
@@ -112,52 +100,46 @@ export default function Layout() {
     const items = [
       { to: '/', icon: LayoutDashboard, label: 'Tableau de Bord', end: true },
       { to: '/announcements', icon: Megaphone, label: 'Annonces' },
-      { to: '/schedule', icon: Calendar, label: 'Emploi du Temps' },
+      { to: '/schedule', icon: Calendar, label: 'Documents' },
       { to: '/exams', icon: GraduationCap, label: 'Examens' },
-      { to: '/meet', icon: Video, label: 'Visioconférence' },
+      { to: '/meet', icon: Video, label: 'Directs' },
       { to: '/polls', icon: BarChart2, label: 'Consultations' },
-      { to: '/profile', icon: UserCircle, label: 'Mon Profil' },
+      { to: '/profile', icon: UserCircle, label: 'Profil' },
     ];
-    if (user?.role === UserRole.ADMIN) {
-      items.push({ to: '/admin', icon: ShieldCheck, label: 'Administration' } as any);
-    }
+    if (user?.role === UserRole.ADMIN) items.push({ to: '/admin', icon: ShieldCheck, label: 'Administration' } as any);
     return items;
   }, [user?.role]);
 
   const handleLogout = useCallback(async () => {
-    if (window.confirm("Se déconnecter de la plateforme ?")) {
+    if (window.confirm("Se déconnecter de UniConnect ?")) {
       await logout();
       navigate('/login');
     }
   }, [logout, navigate]);
 
-  const hasAnyResult = searchResults.announcements.length > 0 || searchResults.exams.length > 0 || searchResults.schedules.length > 0;
-
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 font-sans overflow-hidden">
       {isSidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-gray-900/60 md:hidden backdrop-blur-sm transition-opacity duration-200" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-gray-900/60 md:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 transform transition-transform duration-200 ease-out md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 transform transition-transform duration-300 md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-premium md:shadow-none`}>
         <div className="p-8 h-24 flex-shrink-0 flex items-center gap-4">
-          <div className="w-12 h-12 flex items-center justify-center text-white rounded-2xl shadow-lg transition-transform hover:scale-110" style={{ backgroundColor: themeColor }}>
+          <div className="w-12 h-12 flex items-center justify-center text-white rounded-[1.2rem] shadow-xl" style={{ backgroundColor: themeColor }}>
              <School size={28} />
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tighter uppercase italic leading-none">UniConnect</h1>
-            <p className="text-[9px] font-black uppercase tracking-widest mt-1 truncate opacity-70" style={{ color: themeColor }}>{user?.schoolName || 'ESP DAKAR'}</p>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] mt-1 opacity-70" style={{ color: themeColor }}>{user?.schoolName || 'ESP DAKAR'}</p>
           </div>
         </div>
 
         <div className="px-6 py-2 flex-1 overflow-y-auto custom-scrollbar">
-          <NavLink to="/profile" className={({ isActive }) => `flex items-center gap-4 mb-10 p-5 rounded-[2rem] transition-all duration-200 group border-2 ${isActive ? 'bg-gray-50/50 border-gray-200 dark:bg-gray-800/10 dark:border-gray-800/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-transparent shadow-sm bg-white dark:bg-gray-800/20'}`}>
+          <NavLink to="/profile" className={({ isActive }) => `flex items-center gap-4 mb-10 p-5 rounded-[2.2rem] transition-all border-2 ${isActive ? 'bg-gray-50/50 border-gray-200 dark:bg-gray-800/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-transparent shadow-sm'}`}>
              <UserAvatar name={user?.name || "U"} color={themeColor} className="w-12 h-12" textClassName="text-xl" />
              <div className="flex-1 min-w-0">
-               <p className="text-sm font-black truncate text-gray-900 dark:text-white leading-tight">{user?.name.split(' ')[0]}</p>
-               <div className="mt-1 inline-flex px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-md">
-                 <p className="text-[8px] text-gray-500 dark:text-gray-300 truncate font-black uppercase tracking-widest">{user?.className || 'Visiteur'}</p>
-               </div>
+               <p className="text-sm font-black truncate text-gray-900 dark:text-white italic">{user?.name.split(' ')[0]}</p>
+               <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">{user?.className}</p>
              </div>
           </NavLink>
 
@@ -167,20 +149,20 @@ export default function Layout() {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) => `flex items-center gap-4 px-5 py-4 text-sm font-bold rounded-2xl transition-all duration-200 group
-                  ${isActive ? 'text-white shadow-lg' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/20'}`}
+                className={({ isActive }) => `flex items-center gap-4 px-6 py-4 text-xs font-black uppercase tracking-widest rounded-2xl transition-all group
+                  ${isActive ? 'text-white shadow-xl italic' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/20'}`}
                 style={({ isActive }) => isActive ? { backgroundColor: themeColor } : {}}
               >
-                <item.icon size={20} className="transition-transform group-hover:scale-110" />
-                <span className="tracking-tight">{item.label}</span>
+                <item.icon size={20} className="group-hover:rotate-12 transition-transform" />
+                <span>{item.label}</span>
               </NavLink>
             ))}
           </nav>
         </div>
 
         <div className="p-6">
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all duration-200 italic active:scale-95">
-            <LogOut size={18} /> Déconnexion
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all italic active:scale-95">
+            <LogOut size={18} /> Quitter le portail
           </button>
         </div>
       </aside>
@@ -188,64 +170,35 @@ export default function Layout() {
       <div className="flex-1 md:ml-72 flex flex-col h-screen overflow-hidden">
         <header className="h-24 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-8 z-20 sticky top-0">
           <div className="flex items-center gap-6 flex-1 max-w-2xl">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-3 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all">
+            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-3 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90">
               <Menu size={24} />
             </button>
             
             <div className="relative flex-1 group hidden sm:block" ref={searchRef}>
               <div className="relative">
-                <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors duration-200 ${isSearchOpen ? 'text-primary-500' : 'text-gray-400'}`} size={20} />
+                <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${isSearchOpen ? 'text-primary-500' : 'text-gray-400'}`} size={20} />
                 <input 
-                  type="text" 
-                  placeholder="Recherche instantanée..." 
-                  value={searchQuery}
+                  type="text" placeholder="Trouver un cours, un examen..." value={searchQuery}
                   onFocus={() => { setIsSearchOpen(true); prefetchSearchData(); }}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-14 pr-12 py-3.5 bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl text-sm font-bold italic outline-none focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 transition-all duration-200"
+                  className="w-full pl-14 pr-12 py-3.5 bg-gray-50 dark:bg-gray-800/50 border-none rounded-2xl text-sm font-bold italic outline-none focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 transition-all duration-300"
                 />
               </div>
 
               {isSearchOpen && (searchQuery.length >= 2) && (
-                <div className="absolute top-full left-0 right-0 mt-4 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar p-4 space-y-6">
-                    {!hasAnyResult ? (
-                      <div className="py-12 text-center opacity-30">
-                        <Search size={32} className="mx-auto mb-3" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Aucun résultat</p>
-                      </div>
+                <div className="absolute top-full left-0 right-0 mt-4 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in slide-in-from-top-2">
+                  <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-6 space-y-6">
+                    {Object.values(searchResults).every((arr: any) => arr.length === 0) ? (
+                      <div className="py-12 text-center opacity-30 italic font-black text-[10px] uppercase">Rien trouvé</div>
                     ) : (
                       <>
                         {searchResults.announcements.length > 0 && (
                           <div className="space-y-2">
-                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">Annonces</h4>
+                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Annonces</h4>
                             {searchResults.announcements.map(ann => (
-                              <button key={ann.id} onClick={() => { setIsSearchOpen(false); navigate('/announcements'); }} className="w-full text-left p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group active:scale-[0.98]">
-                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{ann.title}</p>
-                                <p className="text-[10px] text-gray-500 line-clamp-1 mt-1 opacity-70">{ann.content}</p>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {searchResults.exams.length > 0 && (
-                          <div className="space-y-2">
-                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">Examens</h4>
-                            {searchResults.exams.map(exam => (
-                              <button key={exam.id} onClick={() => { setIsSearchOpen(false); navigate('/exams'); }} className="w-full text-left p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group active:scale-[0.98]">
-                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{exam.subject}</p>
-                                <p className="text-[9px] text-gray-400 mt-1">Salle {exam.room} • {new Date(exam.date).toLocaleDateString()}</p>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {searchResults.schedules.length > 0 && (
-                          <div className="space-y-2">
-                            <h4 className="px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">Documents</h4>
-                            {searchResults.schedules.map(sch => (
-                              <button key={sch.id} onClick={() => { setIsSearchOpen(false); navigate('/schedule'); }} className="w-full text-left p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group active:scale-[0.98]">
-                                <p className="text-sm font-black text-gray-900 dark:text-white line-clamp-1 italic group-hover:text-primary-500">{sch.category} - {sch.version}</p>
-                                <p className="text-[9px] text-gray-400 mt-1">{sch.className || 'ESP'}</p>
+                              <button key={ann.id} onClick={() => { setIsSearchOpen(false); navigate('/announcements'); }} className="w-full text-left p-4 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group">
+                                <p className="text-sm font-black text-gray-900 dark:text-white italic group-hover:text-primary-500">{ann.title}</p>
+                                <p className="text-[10px] text-gray-400 line-clamp-1 mt-1">{ann.content}</p>
                               </button>
                             ))}
                           </div>
@@ -258,60 +211,57 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 relative" ref={notifRef}>
-             <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl relative transition-all active:scale-90 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800' : ''}`}>
-               <Bell size={24} style={isNotifOpen ? { color: themeColor } : {}} />
-               {unreadCount > 0 && (
-                 <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full ring-4 ring-white dark:ring-gray-900 animate-pulse"></span>
-               )}
-             </button>
+          <div className="flex items-center gap-4" ref={notifRef}>
+             <div className="relative">
+               <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800 shadow-inner' : ''}`}>
+                 <Bell size={24} style={isNotifOpen ? { color: themeColor } : {}} />
+                 {unreadCount > 0 && (
+                   <span className="absolute top-2 right-2 w-3.5 h-3.5 bg-red-500 rounded-full ring-4 ring-white dark:ring-gray-900 animate-pulse border border-white"></span>
+                 )}
+               </button>
 
-             {isNotifOpen && (
-               <div className="absolute top-full right-0 mt-4 w-80 bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="p-6 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alertes Campus</h4>
-                      <p className="text-sm font-black italic mt-1">{unreadCount} non lues</p>
+               {isNotifOpen && (
+                 <div className="absolute top-full right-0 mt-4 w-80 bg-white dark:bg-gray-900 rounded-[3rem] shadow-premium border border-gray-100 dark:border-gray-800 z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
+                      <div>
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic">Notifications</h4>
+                        <p className="text-sm font-black italic mt-1">{unreadCount} non lues</p>
+                      </div>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllAsRead} className="p-3 bg-white dark:bg-gray-700 text-primary-500 hover:bg-primary-500 hover:text-white rounded-2xl shadow-sm transition-all active:scale-90" title="Tout marquer comme lu">
+                          <CheckCheck size={20} />
+                        </button>
+                      )}
                     </div>
-                    {unreadCount > 0 && (
-                      <button onClick={markAllAsRead} className="p-2 text-primary-500 hover:bg-primary-50 rounded-xl transition-all" title="Tout marquer comme lu">
-                        <CheckCheck size={20} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="max-h-[60vh] overflow-y-auto custom-scrollbar p-2">
-                    {notifications.length > 0 ? notifications.map(notif => (
-                      <div key={notif.id} className={`p-4 rounded-2xl flex gap-4 transition-all ${notif.isRead ? 'opacity-60' : 'bg-primary-50/30 dark:bg-primary-900/10'}`}>
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          notif.type === 'alert' ? 'bg-red-100 text-red-500' : 
-                          notif.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 
-                          'bg-primary-100 text-primary-500'
-                        }`}>
-                          <Bell size={18} />
+                    <div className="max-h-[50vh] overflow-y-auto custom-scrollbar p-3 space-y-2">
+                      {notifications.length > 0 ? notifications.map(notif => (
+                        <div key={notif.id} className={`p-5 rounded-[2rem] flex gap-4 transition-all relative group ${notif.isRead ? 'opacity-50 grayscale' : 'bg-primary-50/30 dark:bg-primary-900/10'}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                            notif.type === 'alert' ? 'bg-rose-100 text-rose-500' : 'bg-primary-100 text-primary-500'
+                          }`}>
+                            <Bell size={18} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-black text-gray-900 dark:text-white leading-tight italic">{notif.title}</p>
+                            <p className="text-[10px] text-gray-500 line-clamp-2 mt-1 italic">{notif.message}</p>
+                            <p className="text-[8px] font-black text-gray-400 uppercase mt-2 tracking-widest">{new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                          </div>
+                          {!notif.isRead && (
+                            <button onClick={() => markAsRead(notif.id)} className="p-2 text-primary-500 hover:scale-125 transition-transform absolute top-4 right-4">
+                              <Check size={14} />
+                            </button>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-gray-900 dark:text-white leading-tight italic">{notif.title}</p>
-                          <p className="text-[10px] text-gray-500 line-clamp-2 mt-1 italic">{notif.message}</p>
-                          <p className="text-[8px] font-black text-gray-400 uppercase mt-2 tracking-widest">{new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                        </div>
-                        {!notif.isRead && (
-                          <button onClick={() => markAsRead(notif.id)} className="p-1 text-primary-500 self-start">
-                            <Check size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )) : (
-                      <div className="py-12 text-center opacity-30">
-                        <Bell size={32} className="mx-auto mb-3" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Aucune notification</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 border-t border-gray-50 dark:border-gray-800">
-                    <button onClick={clearNotifications} className="w-full py-3 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] hover:text-red-500 transition-colors">Effacer l'historique</button>
-                  </div>
-               </div>
-             )}
+                      )) : (
+                        <div className="py-20 text-center opacity-30 grayscale italic text-[10px] font-black uppercase">Flux vide</div>
+                      )}
+                    </div>
+                    <div className="p-5 border-t border-gray-50 dark:border-gray-800 bg-gray-50/20">
+                      <button onClick={clearNotifications} className="w-full py-4 text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] hover:text-red-500 transition-colors italic">Vider l'historique</button>
+                    </div>
+                 </div>
+               )}
+             </div>
 
              <button onClick={toggleTheme} className="p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90">
                {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
@@ -319,9 +269,12 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6 sm:p-10 pb-32 bg-gray-50/30 dark:bg-gray-950 custom-scrollbar animate-fade-in">
+        <main className="flex-1 overflow-y-auto p-6 sm:p-12 pb-32 bg-gray-50/50 dark:bg-gray-950 custom-scrollbar animate-fade-in">
           <Outlet />
         </main>
+        
+        {/* Intégration globale de l'IA Assistant */}
+        <GeminiChat />
       </div>
     </div>
   );
