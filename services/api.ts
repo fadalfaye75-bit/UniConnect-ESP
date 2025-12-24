@@ -33,11 +33,19 @@ const handleAPIError = (error: any, fallback: string) => {
   console.error(`[UniConnect API Error] ${fallback}:`, error);
   
   let message = fallback;
-  if (error.code === '23505') message = "Cette donnée existe déjà.";
-  else if (error.code === '42501') message = "Permission refusée. Vérifiez vos droits ou les politiques SQL.";
-  else if (error.code === 'PGRST204') message = "Schéma base de données obsolète. Veuillez exécuter le script SQL dans le README pour ajouter la colonne 'theme_color'.";
-  else if (error.code === 'P0001') message = "Erreur de contrainte : " + detailedMsg;
-  else if (detailedMsg && detailedMsg !== "{}") message = `${fallback}: ${detailedMsg}`;
+  if (error.code === '23505') {
+    message = "Cette donnée existe déjà.";
+  } else if (error.code === '42501') {
+    message = "Permission refusée. Vérifiez vos droits ou les politiques SQL.";
+  } else if (error.code === 'PGRST204') {
+    message = "Schéma base de données obsolète. Veuillez exécuter le script SQL dans le README pour ajouter la colonne 'theme_color'.";
+  } else if (error.code === 'P0001') {
+    message = "Erreur de contrainte : " + detailedMsg;
+  } else if (detailedMsg.includes("New password should be different")) {
+    message = "Le nouveau mot de passe doit être différent de l'actuel.";
+  } else if (detailedMsg && detailedMsg !== "{}") {
+    message = `${fallback}: ${detailedMsg}`;
+  }
   
   throw new Error(message);
 };

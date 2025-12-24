@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
@@ -7,7 +7,7 @@ import {
   Users, BookOpen, UserPlus, Search, Loader2, School, 
   Plus, Trash2, LayoutDashboard, Shield, 
   Ban, CheckCircle, PenSquare, Activity, Copy, Save, AlertCircle, Info, Filter, GraduationCap, Sparkles, Wand2, FileUp, CheckCircle2, AlertTriangle, Zap, Palette,
-  Check, Eye, EyeOff, ClipboardCheck
+  Check, Eye, EyeOff, ClipboardCheck, FileDown, Download
 } from 'lucide-react';
 import { UserRole, ClassGroup, ActivityLog, User } from '../types';
 import Modal from '../components/Modal';
@@ -35,10 +35,10 @@ export default function AdminPanel() {
   const [classesList, setClassesList] = useState<ClassGroup[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   
-  // Modals
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -76,6 +76,72 @@ export default function AdminPanel() {
     }
   };
 
+  // Helper pour l'exportation CSV
+  const downloadCSV = useCallback((data: any[], filename: string) => {
+    if (data.length === 0) return;
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const val = row[header] === null || row[header] === undefined ? "" : row[header];
+        return `"${String(val).replace(/"/g, '""')}"`;
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
+  const handleExportData = async (type: 'users' | 'classes' | 'logs') => {
+    setExporting(type);
+    try {
+      let dataToExport: any[] = [];
+      let filename = "";
+
+      if (type === 'users') {
+        dataToExport = users.map(u => ({
+          Nom: u.name,
+          Email: u.email,
+          Role: u.role,
+          Classe: u.className,
+          Ecole: u.schoolName,
+          Statut: u.isActive ? 'Actif' : 'Bloqué'
+        }));
+        filename = "utilisateurs_uniconnect";
+      } else if (type === 'classes') {
+        dataToExport = classesList.map(c => ({
+          Nom: c.name,
+          Email: c.email,
+          Effectif: c.studentCount
+        }));
+        filename = "classes_uniconnect";
+      } else {
+        dataToExport = logs.map(l => ({
+          Date: new Date(l.timestamp).toLocaleString(),
+          Acteur: l.actor,
+          Action: l.action,
+          Cible: l.target
+        }));
+        filename = "activites_uniconnect";
+      }
+
+      downloadCSV(dataToExport, filename);
+      addNotification({ title: 'Export réussi', message: 'Le fichier CSV est prêt.', type: 'success' });
+    } catch (e) {
+      addNotification({ title: 'Erreur Export', message: 'Impossible de générer le fichier.', type: 'alert' });
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const dashboardStats = useMemo(() => {
     const rolesCount = { [UserRole.ADMIN]: 0, [UserRole.DELEGATE]: 0, [UserRole.STUDENT]: 0 };
     users.forEach(u => { 
@@ -99,23 +165,10 @@ export default function AdminPanel() {
       addNotification({ title: 'Données manquantes', message: 'Remplissez tous les champs.', type: 'warning' });
       return;
     }
-
-    const emailLower = newUser.email.trim().toLowerCase();
-    const existingUser = users.find(u => u.email.toLowerCase() === emailLower);
-    
-    if (existingUser) {
-      addNotification({ 
-        title: 'Email déjà utilisé', 
-        message: `L'email ${emailLower} est déjà associé au profil de ${existingUser.name}.`, 
-        type: 'warning' 
-      });
-      return;
-    }
-
     setSubmitting(true);
     try {
       await API.auth.createUser({
-        name: newUser.fullName, email: emailLower, role: newUser.role,
+        name: newUser.fullName, email: newUser.email.trim().toLowerCase(), role: newUser.role,
         password: newUser.password,
         className: newUser.className, schoolName: newUser.schoolName
       });
@@ -159,13 +212,6 @@ export default function AdminPanel() {
     } finally { setSubmitting(false); }
   };
 
-  const handleCopyUserDetails = (u: User) => {
-    const text = `UniConnect ESP Dakar\nNom: ${u.name}\nEmail: ${u.email}\nRôle: ${u.role}\nClasse: ${u.className || 'N/A'}`;
-    navigator.clipboard.writeText(text).then(() => {
-      addNotification({ title: 'Copié', message: 'Détails du profil copiés.', type: 'success' });
-    });
-  };
-
   const handleToggleStatus = async (userId: string) => {
       if(!window.confirm("Changer le statut d'accès de cet utilisateur ?")) return;
       try {
@@ -181,15 +227,6 @@ export default function AdminPanel() {
           await API.auth.deleteUser(userId);
           fetchGlobalData();
           addNotification({ title: 'Supprimé', message: 'Le compte a été retiré de la plateforme.', type: 'info' });
-      } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
-  };
-
-  const handleDeleteClass = async (id: string, name: string) => {
-      if(!window.confirm(`Supprimer la classe ${name} ?`)) return;
-      try {
-          await API.classes.delete(id);
-          await fetchGlobalData();
-          addNotification({ title: 'Supprimé', message: 'Filière retirée de la liste.', type: 'info' });
       } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
   };
 
@@ -264,9 +301,24 @@ export default function AdminPanel() {
 
          <div className="bg-gradient-to-br from-indigo-600 to-primary-700 rounded-[2.5rem] p-6 text-white shadow-xl relative overflow-hidden group">
             <Sparkles className="absolute -bottom-4 -right-4 w-24 h-24 opacity-10 group-hover:scale-125 transition-transform" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-70">Support Système</p>
-            <h4 className="text-xl font-black italic tracking-tighter mb-4">Besoin d'aide technique ?</h4>
-            <button className="w-full py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Consulter Docs</button>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-70">Centre d'Exportation</p>
+            <h4 className="text-lg font-black italic tracking-tighter mb-4">Extraire les données</h4>
+            <div className="space-y-2">
+              <button 
+                onClick={() => handleExportData('users')}
+                disabled={exporting === 'users'}
+                className="w-full py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              >
+                {exporting === 'users' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={14} />} Users CSV
+              </button>
+              <button 
+                onClick={() => handleExportData('classes')}
+                disabled={exporting === 'classes'}
+                className="w-full py-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              >
+                {exporting === 'classes' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={14} />} Classes CSV
+              </button>
+            </div>
          </div>
       </div>
 
@@ -320,6 +372,20 @@ export default function AdminPanel() {
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
+                            </div>
+                            <div className="bg-white dark:bg-gray-900 p-10 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800 flex flex-col justify-center items-center text-center">
+                               <div className="w-20 h-20 bg-gray-50 dark:bg-gray-800 rounded-3xl flex items-center justify-center text-gray-400 mb-6">
+                                  <FileDown size={40} />
+                               </div>
+                               <h4 className="text-sm font-black uppercase tracking-widest italic mb-4">Rapports Complets</h4>
+                               <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Téléchargez l'intégralité des données en un clic.</p>
+                               <button 
+                                 onClick={() => handleExportData('logs')} 
+                                 disabled={exporting === 'logs'}
+                                 className="px-10 py-4 bg-gray-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-3 active:scale-95 transition-all"
+                               >
+                                 {exporting === 'logs' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Journal d'Audit CSV
+                               </button>
                             </div>
                         </div>
                     </div>
@@ -530,12 +596,6 @@ export default function AdminPanel() {
                     </div>
                 </div>
                 
-                <div className="flex gap-2">
-                    <button type="button" onClick={() => handleCopyUserDetails(editingUser)} className="flex-1 bg-gray-100 hover:bg-gray-200 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"><Copy size={16}/> Copier profil</button>
-                    <button type="button" onClick={() => handleToggleStatus(editingUser.id)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${editingUser.isActive ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
-                        {editingUser.isActive ? <Ban size={16}/> : <CheckCircle size={16}/>} {editingUser.isActive ? 'Bloquer' : 'Activer'}
-                    </button>
-                </div>
                 <button disabled={submitting} type="submit" className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 flex items-center justify-center gap-2 uppercase tracking-widest transition-all">
                     {submitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Enregistrer les modifications
                 </button>

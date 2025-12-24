@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
@@ -23,7 +23,7 @@ export default function Profile() {
   const { addNotification } = useNotification();
   
   const [activeTab, setActiveTab] = useState<'info' | 'favorites'>('info');
-  const [loading, setLoading] = useState(false);
+  const [loadingPass, setLoadingPass] = useState(false); // État dédié au mot de passe
   const [infoLoading, setInfoLoading] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   
@@ -53,7 +53,7 @@ export default function Profile() {
     }
   }, [user]);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     setFavLoading(true);
     try {
       const favs = await API.favorites.list();
@@ -74,13 +74,13 @@ export default function Profile() {
     } finally {
       setFavLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'favorites') {
       fetchFavorites();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchFavorites]);
 
   const handleInfoChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +117,7 @@ export default function Profile() {
     if (!passwords.newPassword) return;
     navigator.clipboard.writeText(passwords.newPassword);
     setCopied(true);
-    addNotification({ title: 'Copié', message: 'Mot de passe dans le presse-papier.', type: 'success' });
+    addNotification({ title: 'Copié', message: 'Mot de passe prêt.', type: 'success' });
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -128,26 +128,31 @@ export default function Profile() {
       return;
     }
     if (passwords.newPassword.length < 6) {
-      addNotification({ title: 'Sécurité', message: 'Minimum 6 caractères requis.', type: 'warning' });
+      addNotification({ title: 'Sécurité', message: 'Le mot de passe doit comporter au moins 6 caractères.', type: 'warning' });
       return;
     }
-    setLoading(true);
+    
+    setLoadingPass(true);
     try {
       if(user) await API.auth.updatePassword(user.id, passwords.newPassword);
       addNotification({ title: 'Sécurisé', message: 'Votre mot de passe a été modifié avec succès.', type: 'success' });
       setPasswords({ newPassword: '', confirmPassword: '' });
       setShowPassword(false);
-    } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Échec du changement de mot de passe.', type: 'alert' });
+    } catch (error: any) {
+      addNotification({ 
+        title: 'Erreur Sécurité', 
+        message: error.message || 'Échec de la modification.', 
+        type: 'alert' 
+      });
     } finally {
-      setLoading(false);
+      setLoadingPass(false);
     }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-32 animate-fade-in">
       <div className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-gray-100 dark:border-gray-800 pb-10">
-        <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase">Mon Profil</h2>
+        <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Mon Profil</h2>
         <div className="flex bg-white dark:bg-gray-800 p-2 rounded-[2rem] shadow-soft border border-gray-50 dark:border-gray-700">
           <button 
             onClick={() => setActiveTab('info')}
@@ -289,8 +294,8 @@ export default function Profile() {
                       <input required type={showPassword ? "text" : "password"} value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
                     </div>
                   </div>
-                  <button type="submit" disabled={loading} className="w-full sm:w-auto bg-gray-900 dark:bg-black text-white px-12 py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest italic text-xs active:scale-95 transition-all shadow-xl">
-                    {loading ? <Loader2 className="animate-spin" /> : <Lock size={20} />} Mettre à jour la sécurité
+                  <button type="submit" disabled={loadingPass} className="w-full sm:w-auto bg-gray-900 dark:bg-black text-white px-12 py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest italic text-xs active:scale-95 transition-all shadow-xl">
+                    {loadingPass ? <Loader2 className="animate-spin" /> : <Lock size={20} />} Mettre à jour la sécurité
                   </button>
               </form>
             </div>
