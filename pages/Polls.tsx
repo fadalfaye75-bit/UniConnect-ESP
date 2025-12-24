@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power, Share2, Send, BarChart as BarChartIcon, PieChart as PieChartIcon, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, Lock, Unlock, Loader2, BarChart2, Check, Users, Search, Sparkles, Shield, Send, Share2, AlertCircle, Vote, X, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { UserRole, Poll, ClassGroup } from '../types';
+import { UserRole, Poll } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
@@ -13,27 +13,22 @@ import {
   YAxis, 
   Tooltip, 
   ResponsiveContainer, 
-  Cell,
-  PieChart,
-  Pie,
-  Legend
+  Cell
 } from 'recharts';
 
 export default function Polls() {
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const themeColor = user?.themeColor || '#8b5cf6';
+  const themeColor = user?.themeColor || '#0ea5e9';
   
   const [polls, setPolls] = useState<Poll[]>([]);
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewingPoll, setViewingPoll] = useState<Poll | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [votingIds, setVotingIds] = useState<Set<string>>(new Set());
+  const [votingId, setVotingId] = useState<string | null>(null);
+  const [votedOptionId, setVotedOptionId] = useState<string | null>(null); // Pour l'animation locale
   
-  const [votedOptionId, setVotedOptionId] = useState<string | null>(null);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'closed'>('all');
 
@@ -41,27 +36,24 @@ export default function Polls() {
     question: '',
     className: '',
     options: ['', ''],
+    endTime: ''
   });
 
   const isAdmin = user?.role === UserRole.ADMIN;
-  const canPost = API.auth.canPost(user);
+  const isDelegate = user?.role === UserRole.DELEGATE;
+  const canPost = isAdmin || isDelegate;
 
   const fetchPolls = useCallback(async (showLoader = false) => {
     try {
       if(showLoader) setLoading(true); 
       const data = await API.polls.list();
       setPolls(data);
-      
-      if (viewingPoll) {
-        const updated = data.find(p => p.id === viewingPoll.id);
-        if (updated) setViewingPoll(updated);
-      }
     } catch (error: any) {
-      addNotification({ title: 'Erreur', message: 'Chargement échoué.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Impossible de charger les sondages.', type: 'alert' });
     } finally {
       if(showLoader) setLoading(false);
     }
-  }, [addNotification, viewingPoll]);
+  }, [addNotification]);
 
   useEffect(() => {
     fetchPolls(true);
@@ -72,27 +64,23 @@ export default function Polls() {
 
   const handleVote = async (pollId: string, optionId: string, currentVoteId?: string) => {
     if (currentVoteId === optionId) return;
-    if (!user || votingIds.has(pollId)) return;
+    if (!user || votingId) return;
     
-    setVotedOptionId(optionId);
-    setVotingIds(prev => new Set(prev).add(pollId));
-
+    setVotingId(pollId);
+    setVotedOptionId(optionId); // Trigger l'animation locale
+    
     try {
       await API.polls.vote(pollId, optionId);
-      await fetchPolls(false);
       addNotification({ 
-        title: currentVoteId ? 'Vote mis à jour' : 'Vote confirmé', 
-        message: 'Votre participation a été enregistrée avec succès.', 
+        title: currentVoteId ? 'Vote modifié' : 'Merci pour votre vote !', 
+        message: 'Votre choix a été enregistré avec succès.', 
         type: 'success' 
       });
+      await fetchPolls(false);
     } catch (error: any) {
-      addNotification({ title: 'Erreur', message: error.message || 'Échec du vote.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: error.message, type: 'alert' });
     } finally {
-      setVotingIds(prev => {
-        const next = new Set(prev);
-        next.delete(pollId);
-        return next;
-      });
+      setVotingId(null);
       setTimeout(() => setVotedOptionId(null), 600);
     }
   };
@@ -100,19 +88,19 @@ export default function Polls() {
   const handleToggleStatus = async (poll: Poll) => {
     try {
       await API.polls.update(poll.id, { isActive: !poll.isActive });
+      addNotification({ title: 'Statut mis à jour', message: poll.isActive ? 'Le sondage est maintenant clos.' : 'Le sondage est à nouveau ouvert.', type: 'info' });
       fetchPolls(false);
-      addNotification({ title: 'Statut mis à jour', message: poll.isActive ? 'Scrutin clos.' : 'Scrutin réouvert.', type: 'info' });
     } catch (e) {
-      addNotification({ title: 'Erreur', message: 'Impossible de changer le statut.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Supprimer ce sondage et tous les votes associés ?")) return;
+    if (!window.confirm("Supprimer définitivement ce sondage ?")) return;
     try {
       await API.polls.delete(id);
+      addNotification({ title: 'Supprimé', message: 'Le sondage a été retiré.', type: 'info' });
       fetchPolls(false);
-      addNotification({ title: 'Supprimé', message: 'Consultation retirée.', type: 'info' });
     } catch (e) {
       addNotification({ title: 'Erreur', message: 'Suppression impossible.', type: 'alert' });
     }
@@ -121,20 +109,28 @@ export default function Polls() {
   const handleCreatePoll = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    
+    const validOptions = newPoll.options.filter(o => o.trim() !== '');
+    if (validOptions.length < 2) {
+      addNotification({ title: 'Attention', message: 'Il faut au moins 2 options.', type: 'warning' });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const targetClass = isAdmin ? newPoll.className : (user?.className || 'Général');
       await API.polls.create({
         question: newPoll.question,
         className: targetClass,
-        options: newPoll.options.filter(o => o.trim() !== '').map(label => ({ label }))
+        options: validOptions.map(label => ({ label })),
+        endTime: newPoll.endTime || null
       });
       setIsModalOpen(false);
+      setNewPoll({ question: '', className: '', options: ['', ''], endTime: '' });
+      addNotification({ title: 'Succès', message: 'Votre sondage est maintenant en ligne.', type: 'success' });
       await fetchPolls(false);
-      setNewPoll({ question: '', className: '', options: ['', ''] });
-      addNotification({ title: 'Succès', message: 'Sondage en ligne.', type: 'success' });
     } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Publication échouée.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Échec de la création.', type: 'alert' });
     } finally {
       setSubmitting(false);
     }
@@ -144,322 +140,308 @@ export default function Polls() {
     return polls.filter(poll => {
       const target = poll.className || 'Général';
       if (!isAdmin && target !== 'Général' && target !== user?.className) return false;
+      
       const matchesSearch = poll.question.toLowerCase().includes(searchTerm.toLowerCase());
       let matchesStatus = true;
       if (statusFilter === 'active') matchesStatus = poll.isActive;
       else if (statusFilter === 'closed') matchesStatus = !poll.isActive;
+      
       return matchesSearch && matchesStatus;
     });
   }, [user, polls, searchTerm, statusFilter, isAdmin]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-premium border border-gray-100 dark:border-gray-800">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">{payload[0].payload.label || payload[0].payload.name}</p>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: themeColor }} />
-            <p className="text-sm font-black italic text-gray-900 dark:text-white">{payload[0].value} voix</p>
-          </div>
-        </div>
-      );
-    }
-    return null;
+  const isNew = (createdAt: string) => {
+    const hoursSinceCreation = (new Date().getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
+    return hoursSinceCreation < 48;
   };
 
-  const PIE_COLORS = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#ec4899'];
-
   if (loading) return (
-    <div className="flex flex-col justify-center items-center h-full gap-8">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-gray-100 dark:border-gray-800 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-20 h-20 border-4 border-t-primary-500 rounded-full animate-spin"></div>
-        </div>
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.5em] animate-pulse">Consultation des urnes...</span>
+    <div className="flex flex-col justify-center items-center h-64 gap-6">
+        <Loader2 className="animate-spin text-primary-500" size={40} />
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse italic">Ouverture des urnes...</p>
     </div>
   );
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 pb-32 animate-fade-in">
-      {/* Header Premium */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-10 border-b border-gray-100 dark:border-gray-800 pb-12">
-        <div className="flex items-center gap-8">
-           <div className="w-24 h-24 text-white rounded-[2.8rem] flex items-center justify-center shadow-premium rotate-3 relative overflow-hidden group" style={{ backgroundColor: themeColor }}>
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-700"></div>
-              <BarChartIcon size={44} className="relative z-10" />
+    <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 border-b border-gray-100 dark:border-gray-800 pb-12">
+        <div className="flex items-center gap-6">
+           <div className="w-20 h-20 text-white rounded-[2rem] flex items-center justify-center shadow-premium rotate-3 relative overflow-hidden group" style={{ backgroundColor: themeColor }}>
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+              <BarChart2 size={36} className="relative z-10" />
            </div>
            <div>
-              <h2 className="text-6xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Scrutins</h2>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.5em] mt-4 flex items-center gap-2">
-                <Shield size={12} className="text-primary-500" /> Prises de décision ESP
+              <h2 className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Sondages</h2>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mt-4 flex items-center gap-2">
+                <Shield size={12} className="text-primary-500" /> Consultations de classe
               </p>
            </div>
         </div>
         {canPost && (
           <button 
             onClick={() => setIsModalOpen(true)} 
-            className="group relative w-full sm:w-auto overflow-hidden bg-gray-900 text-white px-14 py-6 rounded-[2.2rem] text-[11px] font-black uppercase tracking-[0.2em] shadow-premium active:scale-95 transition-all italic"
+            className="group relative overflow-hidden bg-gray-900 text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] shadow-premium active:scale-95 transition-all italic"
           >
             <div className="absolute inset-0 bg-white/10 -translate-x-full group-hover:translate-x-0 transition-transform duration-500"></div>
-            <span className="relative z-10 flex items-center justify-center gap-4">
-               <Plus size={22} /> Nouveau Scrutin
-            </span>
+            <span className="relative z-10 flex items-center gap-3"><Plus size={20} /> Nouveau Sondage</span>
           </button>
         )}
       </div>
 
-      {/* Barre de Filtres */}
-      <div className="flex flex-col lg:flex-row gap-6 bg-white dark:bg-gray-900 p-8 rounded-[3.5rem] shadow-soft border border-gray-50 dark:border-gray-800">
+      {/* Filters */}
+      <div className="flex flex-col lg:flex-row gap-4 bg-white dark:bg-gray-900 p-4 rounded-[2.5rem] shadow-soft border border-gray-50 dark:border-gray-800">
         <div className="relative flex-1 group">
-          <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={24} />
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors" size={20} />
           <input 
-            type="text" placeholder="Rechercher une consultation..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-20 pr-8 py-5 bg-gray-50 dark:bg-gray-800/50 border-none rounded-[1.8rem] text-sm font-bold outline-none italic focus:ring-4 focus:ring-primary-50 dark:focus:ring-primary-900/10 transition-all"
+            type="text" placeholder="Rechercher une question..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            className="w-full pl-16 pr-6 py-4 bg-transparent border-none rounded-2xl text-sm font-bold italic outline-none"
           />
         </div>
-        <div className="flex gap-3">
-          {['all', 'active', 'closed'].map((filter) => (
+        <div className="flex gap-2">
+          {['all', 'active', 'closed'].map((f) => (
             <button
-              key={filter}
-              onClick={() => setStatusFilter(filter as any)}
-              className={`px-8 py-5 rounded-[1.8rem] text-[10px] font-black uppercase tracking-widest transition-all ${
-                statusFilter === filter 
-                ? 'bg-gray-900 text-white shadow-xl italic' 
-                : 'bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              key={f}
+              onClick={() => setStatusFilter(f as any)}
+              className={`px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                statusFilter === f ? 'bg-gray-900 text-white shadow-lg' : 'bg-gray-50 dark:bg-gray-800 text-gray-400'
               }`}
             >
-              {filter === 'all' ? 'Tous' : filter === 'active' ? 'En cours' : 'Clos'}
+              {f === 'all' ? 'Tous' : f === 'active' ? 'Actifs' : 'Clos'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Grid des Sondages */}
-      <div className="grid gap-16">
+      {/* Grid */}
+      <div className="grid gap-10">
         {displayedPolls.map(poll => {
-          const canEdit = API.auth.canEdit(user, poll);
-          const canDelete = API.auth.canDelete(user);
+          const isVoted = poll.hasVoted;
+          const showResults = isVoted || !poll.isActive || isAdmin || isDelegate;
+          const canManagePoll = isAdmin || (isDelegate && poll.user_id === user?.id);
+          const isPollNew = isNew(poll.createdAt);
           
           return (
-            <div key={poll.id} className="group relative bg-white dark:bg-gray-900 rounded-[4.5rem] p-12 lg:p-16 shadow-soft border border-gray-100 dark:border-gray-800 hover:shadow-premium transition-all duration-700 overflow-hidden">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-2 rounded-b-full opacity-40" style={{ backgroundColor: poll.isActive ? themeColor : '#94a3b8' }} />
-              
-              <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-8">
-                 <div className="flex items-center gap-5">
-                    <span className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-sm ${poll.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                      {poll.isActive ? '🟢 Urne Ouverte' : '⚪ Scrutin Clos'}
-                    </span>
-                    <span className="text-xs font-black text-primary-500 uppercase tracking-[0.3em] italic">{poll.className}</span>
-                 </div>
-                 <div className="flex gap-2">
-                    <button 
-                      onClick={() => setViewingPoll(poll)}
-                      className="flex items-center gap-4 px-8 py-3 bg-gray-50 dark:bg-gray-800 rounded-3xl text-[12px] font-black text-gray-900 dark:text-white italic tracking-tight shadow-inner-soft hover:bg-gray-100 transition-all group/btn"
-                    >
-                        <BarChartIcon size={18} className="text-gray-400 group-hover/btn:text-primary-500 transition-colors" /> Stats
-                    </button>
-                    {canEdit && (
-                      <button onClick={() => handleToggleStatus(poll)} className={`p-3 rounded-2xl transition-all ${poll.isActive ? 'bg-amber-50 text-amber-500' : 'bg-green-50 text-green-500'}`}>
-                        {poll.isActive ? <Lock size={20}/> : <Unlock size={20}/>}
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button onClick={() => handleDelete(poll.id)} className="p-3 bg-red-50 text-red-500 rounded-2xl">
-                        <Trash2 size={20}/>
-                      </button>
-                    )}
-                 </div>
-              </div>
+            <div key={poll.id} className="group relative bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border border-gray-100 dark:border-gray-800 hover:shadow-premium transition-all duration-500">
+               <div className="absolute top-0 left-0 w-2 h-full opacity-40 transition-all group-hover:w-3" style={{ backgroundColor: poll.isActive ? themeColor : '#94a3b8' }} />
+               
+               <div className="flex flex-col lg:flex-row justify-between items-start mb-10 gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                       <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm ${poll.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+                         {poll.isActive ? '🟢 En cours' : '⚪ Terminé'}
+                       </span>
+                       <span className="text-[10px] font-black text-primary-500 uppercase tracking-widest italic">{poll.className}</span>
+                       {isPollNew && (
+                         <span className="px-3 py-1 bg-amber-100 text-amber-600 rounded-lg text-[8px] font-black uppercase animate-pulse">Nouveau</span>
+                       )}
+                    </div>
+                    <h3 className="text-3xl font-black italic tracking-tighter text-gray-900 dark:text-white leading-tight">
+                      {poll.question}
+                    </h3>
+                  </div>
 
-              <h3 className="text-4xl md:text-5xl font-black italic tracking-tighter mb-16 text-gray-900 dark:text-white leading-[1.1] text-center max-w-4xl mx-auto cursor-pointer" onClick={() => setViewingPoll(poll)}>
-                {poll.question}
-              </h3>
+                  <div className="flex gap-2 shrink-0">
+                     {canManagePoll && (
+                       <>
+                         <button onClick={() => handleToggleStatus(poll)} className={`p-4 rounded-2xl transition-all ${poll.isActive ? 'bg-amber-50 text-amber-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                           {poll.isActive ? <Lock size={20}/> : <Unlock size={20}/>}
+                         </button>
+                         <button onClick={() => handleDelete(poll.id)} className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all">
+                           <Trash2 size={20}/>
+                         </button>
+                       </>
+                     )}
+                     <button onClick={() => { if(navigator.share) navigator.share({title: poll.question, text: `Votez sur UniConnect : ${poll.question}`}); }} className="p-4 bg-gray-50 dark:bg-gray-800 text-gray-400 rounded-2xl">
+                        <Share2 size={20} />
+                     </button>
+                  </div>
+               </div>
 
-              <div className="h-4 w-full bg-gray-100 dark:bg-gray-800 rounded-full mb-16 overflow-hidden flex">
-                {poll.options.map((opt, idx) => (
-                  <div 
-                    key={opt.id}
-                    className="h-full transition-all duration-1000 ease-out"
-                    style={{ 
-                      width: `${poll.totalVotes > 0 ? (opt.votes / poll.totalVotes) * 100 : 0}%`,
-                      backgroundColor: PIE_COLORS[idx % PIE_COLORS.length],
-                      opacity: poll.userVoteOptionId === opt.id ? 1 : 0.6
-                    }}
-                  />
-                ))}
-              </div>
-              
-              <div className="grid gap-6 max-w-4xl mx-auto">
-                {poll.options.map(option => {
-                  const percentage = poll.totalVotes > 0 ? Math.round((option.votes / poll.totalVotes) * 100) : 0;
-                  const isProcessing = votingIds.has(poll.id);
-                  const isSelected = poll.userVoteOptionId === option.id;
-                  const isAnimating = votedOptionId === option.id;
-
-                  return (
-                    <button 
-                      key={option.id} 
-                      disabled={!poll.isActive || isProcessing}
-                      onClick={() => handleVote(poll.id, option.id, poll.userVoteOptionId)} 
-                      className={`relative w-full min-h-[6.5rem] rounded-[3rem] overflow-hidden px-10 border-2 transition-all duration-500 flex items-center justify-between group/opt ${
-                        isSelected 
-                        ? 'bg-white dark:bg-gray-900 border-primary-500 ring-8 ring-primary-50 dark:ring-primary-900/10' 
-                        : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:border-primary-200 shadow-sm'
-                      } ${isAnimating ? 'vote-pulse' : ''} ${!poll.isActive ? 'opacity-70 cursor-default' : 'hover:-translate-y-1 active:scale-[0.98]'}`}
-                    >
-                        <div 
-                          className="progress-liquid absolute left-0 top-0 bottom-0 z-0" 
-                          style={{ 
-                            width: `${percentage}%`, 
-                            background: isSelected 
-                              ? `linear-gradient(90deg, ${themeColor}15 0%, ${themeColor}25 100%)` 
-                              : 'rgba(0,0,0,0.02)' 
-                          }} 
-                        />
+               <div className="grid lg:grid-cols-2 gap-12 items-center">
+                  <div className="space-y-4">
+                     {poll.options.map(option => {
+                        const isSelected = poll.userVoteOptionId === option.id;
+                        const percentage = poll.totalVotes > 0 ? Math.round((option.votes / poll.totalVotes) * 100) : 0;
+                        const isAnimating = votedOptionId === option.id;
                         
-                        <div className="flex items-center gap-8 z-10">
-                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-700 border-2 ${
-                              isSelected 
-                              ? 'bg-primary-500 border-primary-500 text-white shadow-xl rotate-12' 
-                              : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
-                            }`}>
-                                {isSelected ? (
-                                  <Check size={22} strokeWidth={4} className="animate-pop-in" />
-                                ) : (
-                                  <div className="w-2 h-2 rounded-full bg-gray-200 dark:bg-gray-700 group-hover/opt:scale-150 transition-transform" />
-                                )}
-                            </div>
-                            <p className={`text-xl font-black italic transition-colors ${isSelected ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
-                                {option.label}
-                            </p>
-                        </div>
+                        return (
+                          <div key={option.id} className="relative">
+                            <button 
+                              disabled={!poll.isActive || votingId === poll.id}
+                              onClick={() => handleVote(poll.id, option.id, poll.userVoteOptionId)} 
+                              className={`w-full p-6 rounded-[2rem] border-2 transition-all text-left group relative flex items-center justify-between overflow-hidden ${
+                                isSelected 
+                                ? 'bg-primary-500 border-primary-500 text-white shadow-xl' 
+                                : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 hover:border-primary-200'
+                              } ${!poll.isActive ? 'cursor-default' : 'active:scale-[0.98]'} ${isAnimating ? 'vote-pulse' : ''}`}
+                            >
+                               {/* Jauge de fond fluide */}
+                               {showResults && (
+                                 <div 
+                                   className={`absolute left-0 top-0 bottom-0 opacity-10 progress-liquid ${isSelected ? 'bg-white' : 'bg-primary-500'}`}
+                                   style={{ width: `${percentage}%` }}
+                                 />
+                               )}
 
-                        <div className="text-right z-10">
-                            <div className="flex items-baseline gap-2 justify-end">
-                               <span className="text-4xl font-black italic text-gray-900 dark:text-white transition-all">{percentage}</span>
-                               <span className="text-[12px] font-black text-gray-400 uppercase tracking-widest">%</span>
-                            </div>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-2 opacity-60">
-                               {option.votes} voix
-                            </p>
-                        </div>
-                    </button>
-                  );
-                })}
-              </div>
+                               <div className="flex items-center gap-4 relative z-10">
+                                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                                     {isSelected ? <Check size={18} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />}
+                                  </div>
+                                  <span className="font-black italic text-lg tracking-tight">{option.label}</span>
+                               </div>
 
-              {poll.hasVoted && poll.isActive && (
-                <div className="mt-16 flex items-center justify-center gap-4 text-[11px] font-black text-primary-500 uppercase tracking-[0.3em] animate-pulse italic">
-                   <Sparkles size={18} /> Vos statistiques sont mises à jour en temps réel
-                </div>
-              )}
+                               {showResults && (
+                                 <div className="relative z-10 flex flex-col items-end animate-fade-in">
+                                    <span className="text-xl font-black italic">{percentage}%</span>
+                                    <span className="text-[8px] font-black uppercase opacity-60 tracking-widest">{option.votes} voix</span>
+                                 </div>
+                               )}
+                            </button>
+                          </div>
+                        );
+                     })}
+                  </div>
+
+                  {/* Diagramme de Résultats */}
+                  <div className="h-64 bg-gray-50/50 dark:bg-gray-800/30 rounded-[3.5rem] p-8 border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center relative group/chart">
+                     {showResults ? (
+                       <>
+                         <div className="absolute top-6 left-8 flex items-center gap-2 opacity-30">
+                            <TrendingUp size={14} />
+                            <span className="text-[8px] font-black uppercase tracking-widest">Temps réel</span>
+                         </div>
+                         <ResponsiveContainer width="100%" height="100%">
+                           <BarChart data={poll.options} layout="vertical" margin={{ left: 10, right: 30, top: 20, bottom: 20 }}>
+                             <XAxis type="number" hide />
+                             <YAxis dataKey="label" type="category" hide />
+                             <Tooltip 
+                               cursor={{ fill: 'transparent' }} 
+                               content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="bg-gray-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">
+                                        {payload[0].payload.label} : {payload[0].value} voix
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                               }}
+                             />
+                             <Bar dataKey="votes" radius={[0, 15, 15, 0]} barSize={32}>
+                               {poll.options.map((option, index) => (
+                                 <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={poll.userVoteOptionId === option.id ? themeColor : '#cbd5e1'} 
+                                  className="transition-all duration-500"
+                                 />
+                               ))}
+                             </Bar>
+                           </BarChart>
+                         </ResponsiveContainer>
+                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none group-hover/chart:scale-110 transition-transform">
+                            <Users size={32} className="text-gray-200 dark:text-gray-700 mb-2" />
+                            <span className="text-2xl font-black text-gray-300 dark:text-gray-600 italic leading-none">{poll.totalVotes}</span>
+                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Participations</span>
+                         </div>
+                       </>
+                     ) : (
+                       <div className="text-center space-y-4">
+                          <Vote size={48} className="mx-auto text-gray-200 animate-bounce" />
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] italic">Voulez-vous donner votre avis ?<br/>Votez pour voir les résultats.</p>
+                       </div>
+                     )}
+                  </div>
+               </div>
+
+               {poll.isActive && isVoted && (
+                 <div className="mt-8 flex items-center justify-center gap-3 text-[10px] font-black text-primary-500 uppercase tracking-widest italic animate-pulse">
+                   <Sparkles size={14} /> Vous pouvez changer votre choix en un clic avant la clôture.
+                 </div>
+               )}
             </div>
-        )})}
+          );
+        })}
+
+        {displayedPolls.length === 0 && (
+           <div className="py-32 text-center bg-white dark:bg-gray-900 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
+              <AlertCircle size={48} className="mx-auto text-gray-100 mb-6" />
+              <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic opacity-50">Aucun scrutin en cours</p>
+           </div>
+        )}
       </div>
 
-      {/* Modals existants (Analyse/Création) */}
-      <Modal isOpen={!!viewingPoll} onClose={() => setViewingPoll(null)} title="Analyse de la consultation">
-        {viewingPoll && (
-          <div className="space-y-12 pb-6">
-            <div className="text-center space-y-4">
-              <span className="text-[10px] font-black text-primary-500 uppercase tracking-[0.4em] italic">{viewingPoll.className}</span>
-              <h3 className="text-3xl font-black italic tracking-tighter text-gray-900 dark:text-white leading-tight">{viewingPoll.question}</h3>
-              <div className="flex items-center justify-center gap-6 pt-2">
-                <div className="flex items-center gap-2 text-gray-400 font-bold italic text-sm">
-                  <Users size={16} /> {viewingPoll.totalVotes} votants
-                </div>
-                <div className="flex items-center gap-2 text-gray-400 font-bold italic text-sm">
-                  <Clock size={16} /> Créé le {new Date(viewingPoll.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              <div className="h-64 bg-gray-50 dark:bg-gray-800/50 rounded-[2.5rem] p-6 border border-gray-100 dark:border-gray-700">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Répartition des voix</p>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={viewingPoll.options as any[]}
-                      dataKey="votes"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={5}
-                    >
-                      {viewingPoll.options.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="h-64 bg-gray-50 dark:bg-gray-800/50 rounded-[2.5rem] p-6 border border-gray-100 dark:border-gray-700">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Volume par option</p>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={viewingPoll.options as any[]} layout="vertical" margin={{ left: -20, right: 20 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="label" type="category" tick={{ fontSize: 9, fontWeight: 900, fill: '#9ca3af' }} width={80} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                    <Bar dataKey="votes" radius={[0, 10, 10, 0]} barSize={20}>
-                      {viewingPoll.options.map((option, index) => (
-                        <Cell key={`cell-${index}`} fill={viewingPoll.userVoteOptionId === option.id ? themeColor : PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            
-            <button 
-              onClick={() => setViewingPoll(null)}
-              className="w-full py-5 bg-gray-900 text-white rounded-[2rem] font-black uppercase italic tracking-widest text-[11px] transition-all active:scale-95"
-            >
-              Fermer l'analyse
-            </button>
-          </div>
-        )}
-      </Modal>
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Lancer une consultation officielle">
-        <form onSubmit={handleCreatePoll} className="space-y-10">
+      {/* Modal Creation */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Lancer une consultation">
+        <form onSubmit={handleCreatePoll} className="space-y-8">
           <div>
-            <label className="block text-[11px] font-black text-gray-400 uppercase mb-4 ml-2 tracking-[0.3em]">Problématique / Question</label>
-            <textarea required value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} className="w-full p-10 bg-gray-50 dark:bg-gray-800 rounded-[3rem] font-bold italic text-xl outline-none border-none shadow-inner-soft placeholder:opacity-30" rows={3} placeholder="Quelle est la question ?" />
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Question du scrutin</label>
+            <textarea 
+              required 
+              value={newPoll.question} 
+              onChange={e => setNewPoll({...newPoll, question: e.target.value})} 
+              className="w-full p-8 bg-gray-50 dark:bg-gray-800 rounded-[2rem] font-bold italic text-lg outline-none border-none shadow-inner-soft" 
+              rows={3} 
+              placeholder="ex: Quel jour préférez-vous pour le rattrapage ?" 
+            />
           </div>
           
-          <div className="space-y-5">
-             <label className="block text-[11px] font-black text-gray-400 uppercase mb-2 ml-2 tracking-[0.3em]">Choix proposés</label>
+          <div className="space-y-4">
+             <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1 tracking-widest">Options de réponse</label>
              {newPoll.options.map((opt, i) => (
-               <div key={i} className="group flex gap-4">
-                  <div className="w-14 h-16 bg-gray-100 dark:bg-gray-800 rounded-[1.5rem] flex items-center justify-center font-black italic text-gray-400 group-focus-within:bg-primary-500 group-focus-within:text-white transition-all shadow-sm">
+               <div key={i} className="flex gap-3">
+                  <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center font-black italic text-gray-400 shrink-0">
                     {i+1}
                   </div>
-                  <input type="text" required value={opt} onChange={e => {
+                  <input 
+                    type="text" 
+                    required={i < 2}
+                    value={opt} 
+                    onChange={e => {
                       const next = [...newPoll.options];
                       next[i] = e.target.value;
                       setNewPoll({...newPoll, options: next});
-                    }} className="flex-1 px-8 py-4 rounded-[1.5rem] bg-gray-50 dark:bg-gray-800 font-bold italic text-base outline-none border-none focus:ring-4 focus:ring-primary-50 transition-all" placeholder={`Libellé ${i+1}`} />
+                    }} 
+                    className="flex-1 px-6 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 font-bold italic text-sm outline-none border-none" 
+                    placeholder={`Option ${i+1}`} 
+                  />
+                  {i > 1 && (
+                    <button type="button" onClick={() => setNewPoll({...newPoll, options: newPoll.options.filter((_, idx) => idx !== i)})} className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-all"><X size={18}/></button>
+                  )}
                </div>
              ))}
-             <button type="button" onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} className="w-full py-5 border-2 border-dashed border-gray-100 dark:border-gray-800 text-gray-400 hover:text-primary-500 hover:border-primary-200 rounded-[1.8rem] text-[11px] font-black uppercase tracking-[0.3em] transition-all italic">+ Ajouter une alternative</button>
+             {newPoll.options.length < 10 && (
+               <button type="button" onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} className="w-full py-4 border-2 border-dashed border-gray-100 dark:border-gray-800 text-gray-400 hover:text-primary-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all italic">+ Ajouter une alternative</button>
+             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
-            <label className="block text-[11px] font-black text-gray-400 uppercase mb-2 ml-2 tracking-[0.3em]">Cible académique</label>
-            <select disabled={!isAdmin} value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="p-6 w-full bg-gray-50 dark:bg-gray-800 rounded-[1.8rem] font-black text-[12px] uppercase tracking-widest outline-none shadow-sm cursor-pointer">
-              <option value="Général">Toute l'École Polytechnique</option>
-              {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1 tracking-widest">Cible académique</label>
+              <select 
+                disabled={!isAdmin} 
+                value={newPoll.className} 
+                onChange={e => setNewPoll({...newPoll, className: e.target.value})} 
+                className="p-4 w-full bg-gray-50 dark:bg-gray-800 rounded-xl font-black text-[11px] uppercase outline-none shadow-sm cursor-pointer"
+              >
+                <option value="Général">Toute l'école</option>
+                {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1 tracking-widest">Clôture (optionnel)</label>
+              <input 
+                type="datetime-local"
+                value={newPoll.endTime}
+                onChange={e => setNewPoll({...newPoll, endTime: e.target.value})}
+                className="p-4 w-full bg-gray-50 dark:bg-gray-800 rounded-xl font-bold text-xs outline-none shadow-sm"
+              />
+            </div>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-primary-600 hover:bg-primary-700 text-white font-black py-7 rounded-[2.8rem] uppercase italic tracking-[0.3em] shadow-premium active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-4 text-xs">
-             {submitting ? <Loader2 className="animate-spin" /> : <Send size={22} />}
-             <span>Déclencher le scrutin officiel</span>
+          <button type="submit" disabled={submitting} className="w-full bg-primary-600 text-white font-black py-5 rounded-[2rem] uppercase italic tracking-widest shadow-xl active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3">
+             {submitting ? <Loader2 className="animate-spin" /> : <Send size={20} />}
+             <span>Publier la consultation</span>
           </button>
         </form>
       </Modal>

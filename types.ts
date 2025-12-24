@@ -10,11 +10,11 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  className: string; // e.g., "Licence 2 - Info"
+  className: string;
   avatar?: string;
   schoolName?: string;
   isActive?: boolean;
-  themeColor?: string; // Hex color code
+  themeColor?: string;
 }
 
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent';
@@ -35,7 +35,7 @@ export interface Announcement {
   priority: AnnouncementPriority;
   links?: ExternalLink[];
   attachments?: string[];
-  color?: string; // Couleur thématique de l'annonce (souvent celle de l'auteur ou de la classe)
+  color?: string;
 }
 
 export interface Exam {
@@ -98,7 +98,7 @@ export interface ClassGroup {
   name: string;
   email: string;
   studentCount: number;
-  color?: string; // Couleur officielle de la filière
+  color?: string;
 }
 
 export interface AppNotification {
