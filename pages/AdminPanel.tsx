@@ -7,8 +7,7 @@ import {
   Users, BookOpen, UserPlus, Search, Loader2, School, 
   Plus, Trash2, LayoutDashboard, Shield, 
   Ban, CheckCircle, PenSquare, Activity, Copy, Save, AlertCircle, Info, Filter, GraduationCap, Sparkles, Wand2, FileUp, CheckCircle2, AlertTriangle, Zap, Palette,
-  // Fix: Added missing Check icon import
-  Check
+  Check, Eye, EyeOff, ClipboardCheck
 } from 'lucide-react';
 import { UserRole, ClassGroup, ActivityLog, User } from '../types';
 import Modal from '../components/Modal';
@@ -43,8 +42,10 @@ export default function AdminPanel() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showCreatedInfo, setShowCreatedInfo] = useState(false);
   
-  const [newUser, setNewUser] = useState({ fullName: '', email: '', role: UserRole.STUDENT, className: '', schoolName: 'ESP Dakar' });
+  const [newUser, setNewUser] = useState({ fullName: '', email: '', password: 'passer25', role: UserRole.STUDENT, className: '', schoolName: 'ESP Dakar' });
+  const [showPass, setShowPass] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
@@ -99,7 +100,6 @@ export default function AdminPanel() {
       return;
     }
 
-    // Vérification préventive côté client
     const emailLower = newUser.email.trim().toLowerCase();
     const existingUser = users.find(u => u.email.toLowerCase() === emailLower);
     
@@ -116,15 +116,28 @@ export default function AdminPanel() {
     try {
       await API.auth.createUser({
         name: newUser.fullName, email: emailLower, role: newUser.role,
+        password: newUser.password,
         className: newUser.className, schoolName: newUser.schoolName
       });
       await fetchGlobalData();
-      setIsUserModalOpen(false);
-      setNewUser({ fullName: '', email: '', role: UserRole.STUDENT, className: '', schoolName: 'ESP Dakar' });
+      setShowCreatedInfo(true);
       addNotification({ title: 'Compte créé', message: 'Profil activé avec succès.', type: 'success' });
     } catch (error: any) {
       addNotification({ title: 'Erreur', message: error?.message || "Impossible de créer le compte.", type: 'alert' });
     } finally { setSubmitting(false); }
+  };
+
+  const handleCopyNewUserDetails = () => {
+    const text = `UniConnect ESP Dakar\nNom: ${newUser.fullName}\nEmail: ${newUser.email}\nMot de passe: ${newUser.password}\nRôle: ${newUser.role}\nClasse: ${newUser.className || 'Général'}`;
+    navigator.clipboard.writeText(text).then(() => {
+      addNotification({ title: 'Accès Copiés', message: 'Les identifiants sont dans votre presse-papier.', type: 'success' });
+    });
+  };
+
+  const closeUserModal = () => {
+    setIsUserModalOpen(false);
+    setShowCreatedInfo(false);
+    setNewUser({ fullName: '', email: '', password: 'passer25', role: UserRole.STUDENT, className: '', schoolName: 'ESP Dakar' });
   };
 
   const handleOpenEditUser = (u: User) => {
@@ -147,9 +160,9 @@ export default function AdminPanel() {
   };
 
   const handleCopyUserDetails = (u: User) => {
-    const text = `UniConnect ESP Dakar\nNom: ${u.name}\nEmail: ${u.email}\nMot de passe: passer25\nRôle: ${u.role}\nClasse: ${u.className || 'N/A'}`;
+    const text = `UniConnect ESP Dakar\nNom: ${u.name}\nEmail: ${u.email}\nRôle: ${u.role}\nClasse: ${u.className || 'N/A'}`;
     navigator.clipboard.writeText(text).then(() => {
-      addNotification({ title: 'Copié', message: 'Coordonnées copiées.', type: 'success' });
+      addNotification({ title: 'Copié', message: 'Détails du profil copiés.', type: 'success' });
     });
   };
 
@@ -438,25 +451,55 @@ export default function AdminPanel() {
          )}
       </div>
 
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Nouveau compte">
-         <form onSubmit={handleCreateUser} className="space-y-4">
-            <input required className="w-full p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Nom Complet" value={newUser.fullName} onChange={e => setNewUser({...newUser, fullName: e.target.value})} />
-            <input required type="email" className="w-full p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Email Institutionnel (@esp.sn)" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-            <div className="grid grid-cols-2 gap-4">
-                <select className="p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 text-xs font-black uppercase outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
-                    <option value={UserRole.STUDENT}>Étudiant</option>
-                    <option value={UserRole.DELEGATE}>Délégué</option>
-                    <option value={UserRole.ADMIN}>Admin</option>
-                </select>
-                <select className="p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 text-xs font-black uppercase outline-none" value={newUser.className} onChange={e => setNewUser({...newUser, className: e.target.value})}>
-                    <option value="">Classe...</option>
-                    {classesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                </select>
-            </div>
-            <button disabled={submitting} type="submit" className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 uppercase tracking-widest text-[11px] transition-all active:scale-95">
-                {submitting ? <Loader2 className="animate-spin mx-auto" size={18}/> : "Déclencher l'inscription"}
-            </button>
-         </form>
+      <Modal isOpen={isUserModalOpen} onClose={closeUserModal} title={showCreatedInfo ? "Compte créé avec succès" : "Nouveau compte"}>
+         {!showCreatedInfo ? (
+           <form onSubmit={handleCreateUser} className="space-y-4">
+              <input required className="w-full p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Nom Complet" value={newUser.fullName} onChange={e => setNewUser({...newUser, fullName: e.target.value})} />
+              <input required type="email" className="w-full p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Email Institutionnel (@esp.sn)" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+              <div className="relative">
+                <input required type={showPass ? "text" : "password"} className="w-full p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none pr-12" placeholder="Mot de passe par défaut" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <select className="p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 text-xs font-black uppercase outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
+                      <option value={UserRole.STUDENT}>Étudiant</option>
+                      <option value={UserRole.DELEGATE}>Délégué</option>
+                      <option value={UserRole.ADMIN}>Admin</option>
+                  </select>
+                  <select className="p-3.5 rounded-2xl border-none bg-gray-50 dark:bg-gray-800 text-xs font-black uppercase outline-none" value={newUser.className} onChange={e => setNewUser({...newUser, className: e.target.value})}>
+                      <option value="">Classe...</option>
+                      {classesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+              </div>
+              <button disabled={submitting} type="submit" className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 uppercase tracking-widest text-[11px] transition-all active:scale-95">
+                  {submitting ? <Loader2 className="animate-spin mx-auto" size={18}/> : "Déclencher l'inscription"}
+              </button>
+           </form>
+         ) : (
+           <div className="space-y-6 text-center py-4">
+              <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <CheckCircle2 size={32} />
+              </div>
+              <p className="text-sm font-bold text-gray-600 dark:text-gray-300">
+                Le compte de <span className="text-primary-600">{newUser.fullName}</span> a été créé.
+              </p>
+              <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl text-left space-y-2 border border-dashed border-gray-200 dark:border-gray-700">
+                 <p className="text-[10px] font-black uppercase text-gray-400">Identifiants de connexion :</p>
+                 <p className="text-xs font-bold italic">Email: <span className="text-gray-900 dark:text-white">{newUser.email}</span></p>
+                 <p className="text-xs font-bold italic">Pass: <span className="text-gray-900 dark:text-white">{newUser.password}</span></p>
+              </div>
+              <div className="flex gap-3">
+                 <button onClick={handleCopyNewUserDetails} className="flex-1 bg-gray-900 text-white py-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-black transition-all">
+                    <ClipboardCheck size={16}/> Copier les accès
+                 </button>
+                 <button onClick={closeUserModal} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200 transition-all">
+                    Terminer
+                 </button>
+              </div>
+           </div>
+         )}
       </Modal>
 
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Modifier profil">
@@ -488,7 +531,7 @@ export default function AdminPanel() {
                 </div>
                 
                 <div className="flex gap-2">
-                    <button type="button" onClick={() => handleCopyUserDetails(editingUser)} className="flex-1 bg-gray-100 hover:bg-gray-200 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"><Copy size={16}/> Copier accès</button>
+                    <button type="button" onClick={() => handleCopyUserDetails(editingUser)} className="flex-1 bg-gray-100 hover:bg-gray-200 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"><Copy size={16}/> Copier profil</button>
                     <button type="button" onClick={() => handleToggleStatus(editingUser.id)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${editingUser.isActive ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
                         {editingUser.isActive ? <Ban size={16}/> : <CheckCircle size={16}/>} {editingUser.isActive ? 'Bloquer' : 'Activer'}
                     </button>

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserAvatar } from '../components/Layout';
-import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin, School } from 'lucide-react';
+import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin, School, Eye, EyeOff, Copy, ClipboardCheck } from 'lucide-react';
 import { Announcement, ScheduleFile, ClassGroup } from '../types';
 
 const THEME_COLORS = [
@@ -29,6 +29,8 @@ export default function Profile() {
   
   const [personalInfo, setPersonalInfo] = useState({ name: '', schoolName: '', themeColor: '#0ea5e9' });
   const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [userClass, setUserClass] = useState<ClassGroup | null>(null);
   
   const [favoriteItems, setFavoriteItems] = useState<{
@@ -44,7 +46,6 @@ export default function Profile() {
         themeColor: user.themeColor || '#0ea5e9'
       });
       
-      // Récupérer les détails de la classe pour suggérer la couleur
       API.classes.list().then(list => {
         const found = list.find(c => c.name === user.className);
         if (found) setUserClass(found);
@@ -90,7 +91,7 @@ export default function Profile() {
         schoolName: personalInfo.schoolName,
         themeColor: personalInfo.themeColor
       });
-      addNotification({ title: 'Succès', message: 'Profil mis à jour. Vos annonces porteront désormais cette couleur.', type: 'success' });
+      addNotification({ title: 'Succès', message: 'Profil mis à jour.', type: 'success' });
     } catch (error) {
       addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     } finally {
@@ -112,19 +113,32 @@ export default function Profile() {
     }
   };
 
+  const handleCopyPassword = () => {
+    if (!passwords.newPassword) return;
+    navigator.clipboard.writeText(passwords.newPassword);
+    setCopied(true);
+    addNotification({ title: 'Copié', message: 'Mot de passe dans le presse-papier.', type: 'success' });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwords.newPassword !== passwords.confirmPassword) {
-      addNotification({ title: 'Attention', message: 'Confirmation incorrecte.', type: 'alert' });
+      addNotification({ title: 'Attention', message: 'Les mots de passe ne correspondent pas.', type: 'alert' });
+      return;
+    }
+    if (passwords.newPassword.length < 6) {
+      addNotification({ title: 'Sécurité', message: 'Minimum 6 caractères requis.', type: 'warning' });
       return;
     }
     setLoading(true);
     try {
       if(user) await API.auth.updatePassword(user.id, passwords.newPassword);
-      addNotification({ title: 'Sécurisé', message: 'Mot de passe modifié.', type: 'success' });
+      addNotification({ title: 'Sécurisé', message: 'Votre mot de passe a été modifié avec succès.', type: 'success' });
       setPasswords({ newPassword: '', confirmPassword: '' });
+      setShowPassword(false);
     } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Échec de l\'opération.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Échec du changement de mot de passe.', type: 'alert' });
     } finally {
       setLoading(false);
     }
@@ -258,11 +272,21 @@ export default function Profile() {
                   <div className="grid sm:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Nouveau mot de passe</label>
-                      <input required type="password" value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
+                      <div className="relative">
+                        <input required type={showPassword ? "text" : "password"} value={passwords.newPassword} onChange={e => setPasswords({...passwords, newPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all pr-24" placeholder="••••••••" />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <button type="button" onClick={handleCopyPassword} disabled={!passwords.newPassword} className="p-2 text-gray-400 hover:text-primary-500 transition-colors disabled:opacity-30">
+                            {copied ? <ClipboardCheck size={18} className="text-emerald-500" /> : <Copy size={18} />}
+                          </button>
+                          <button type="button" onClick={() => setShowPassword(!showPassword)} className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Confirmer le code</label>
-                      <input required type="password" value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
+                      <input required type={showPassword ? "text" : "password"} value={passwords.confirmPassword} onChange={e => setPasswords({...passwords, confirmPassword: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none border-none focus:ring-4 focus:ring-gray-100 transition-all" placeholder="••••••••" />
                     </div>
                   </div>
                   <button type="submit" disabled={loading} className="w-full sm:w-auto bg-gray-900 dark:bg-black text-white px-12 py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest italic text-xs active:scale-95 transition-all shadow-xl">
@@ -334,7 +358,7 @@ export default function Profile() {
                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-2 tracking-[0.2em]">{sch.className || 'ESP Global'} • MIS À JOUR LE {new Date(sch.uploadDate).toLocaleDateString()}</p>
                         </div>
                         <div className="flex gap-3 relative z-10">
-                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-4 text-emerald-500 hover:text-white hover:bg-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><ExternalLink size={20}/></a>
+                           <a href={sch.url} target="_blank" rel="noreferrer" className="p-4 text-emerald-500 hover:text-white hover:bg-emerald-500 bg-emerald-50 dark:bg-red-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><ExternalLink size={20}/></a>
                            <button onClick={() => handleRemoveFavorite(sch.id, 'schedule')} className="p-4 text-red-400 hover:text-white hover:bg-red-500 bg-red-50 dark:bg-red-900/10 rounded-2xl transition-all shadow-sm active:scale-90"><Trash2 size={20}/></button>
                         </div>
                       </div>
