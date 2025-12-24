@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Download, Upload, Loader2, Trash2, Share2, FileText, CalendarDays, Star, Search, ShieldCheck, CheckCircle2, History, Eye, ArrowRight } from 'lucide-react';
+import { Download, Upload, Loader2, Trash2, Share2, FileText, CalendarDays, Star, Search, ShieldCheck, CheckCircle2, History, Eye, ArrowRight, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, ScheduleFile } from '../types';
 import { useNotification } from '../context/NotificationContext';
@@ -87,13 +87,12 @@ export default function Schedule() {
       const sameTypeCount = schedules.filter(s => s.className === targetClass).length;
       const versionLabel = `${newFile.title} (V${sameTypeCount + 1})`;
 
-      // Simulation Supabase Storage
-      await new Promise(r => setTimeout(r, 1500));
-      const mockUrl = `https://uniconnect.storage/esp/planning/${targetClass}/${newFile.file.name}`;
+      // Création d'une URL de blob locale pour permettre l'aperçu/téléchargement réel
+      const localUrl = URL.createObjectURL(newFile.file);
 
       await API.schedules.create({
         version: versionLabel,
-        url: mockUrl,
+        url: localUrl, // On stocke l'URL locale pour la démo interactive
         className: targetClass,
         category: 'Planning'
       });
@@ -191,7 +190,7 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* Grid des Plannings avec Staggered Animation */}
+      {/* Grid des Plannings */}
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {displayedSchedules.map((sch, idx) => {
           const isLatest = latestVersions.has(sch.id);
@@ -199,7 +198,7 @@ export default function Schedule() {
 
           return (
             <div key={sch.id} className={`stagger-item stagger-${(idx % 3) + 1} group relative bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 transition-all duration-500 flex flex-col overflow-hidden ${isLatest ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-transparent hover:border-gray-100 dark:hover:border-gray-800'}`}>
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-900/10 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000 opacity-20"></div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-900/10 -mr-16 -mt-16 rounded-full group-hover:scale-125 transition-transform duration-1000 opacity-20"></div>
                 
                 <div className="flex justify-between items-start mb-10 relative z-10">
                     <div className="p-5 bg-emerald-50 text-emerald-600 rounded-[1.8rem] shadow-sm transform group-hover:-rotate-6 transition-transform">
@@ -231,7 +230,7 @@ export default function Schedule() {
                       <Eye size={16} /> Aperçu
                    </button>
                    <a 
-                      href={sch.url} target="_blank" rel="noreferrer"
+                      href={sch.url} target="_blank" rel="noreferrer" download
                       className="flex items-center justify-center gap-2 bg-gray-900 text-white py-4 rounded-2xl font-black uppercase text-[9px] tracking-widest italic shadow-lg hover:bg-black transition-all active:scale-95"
                     >
                       <Download size={16} /> Ouvrir
@@ -249,6 +248,7 @@ export default function Schedule() {
         )}
       </div>
 
+      {/* Modal Upload */}
       <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Diffuser une semaine">
          <form onSubmit={handleFileUpload} className="space-y-8">
             <div className={`p-12 border-4 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center gap-6 transition-all relative group bg-gray-50/50 dark:bg-gray-800/30 ${newFile.file ? 'border-emerald-400' : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300'}`}>
@@ -282,11 +282,6 @@ export default function Schedule() {
               </div>
             </div>
 
-            <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-3xl flex gap-5 border border-emerald-100 dark:border-emerald-800">
-               <ShieldCheck size={28} className="shrink-0" />
-               <p className="text-[10px] font-bold italic leading-relaxed uppercase tracking-tight">Le système archive automatiquement les anciennes versions pour conserver un historique complet.</p>
-            </div>
-
             <button type="submit" disabled={uploading || !newFile.file} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[2.5rem] uppercase italic tracking-widest shadow-xl active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3">
               {uploading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
               <span>Lancer la diffusion</span>
@@ -294,9 +289,10 @@ export default function Schedule() {
          </form>
       </Modal>
 
+      {/* Modal Aperçu Réel */}
       <Modal isOpen={!!previewFile} onClose={() => setPreviewFile(null)} title="Consultation Planning">
          {previewFile && (
-            <div className="space-y-8 animate-fade-in">
+            <div className="space-y-8 animate-fade-in flex flex-col h-full">
                <div className="flex items-center gap-5 p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
                   <div className="w-16 h-16 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-center text-emerald-500 shadow-sm"><FileText size={32}/></div>
                   <div className="min-w-0">
@@ -305,21 +301,25 @@ export default function Schedule() {
                   </div>
                </div>
 
-               <div className="aspect-[4/5] bg-gray-100 dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-center relative overflow-hidden group">
-                  <div className="text-center p-12 space-y-4">
-                     <FileText size={64} className="mx-auto text-gray-300 animate-pulse" />
-                     <p className="text-sm font-black italic text-gray-400 uppercase tracking-widest leading-relaxed">Chargement du document sécurisé...</p>
-                  </div>
-                  <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                     <a href={previewFile.url} target="_blank" rel="noreferrer" className="px-10 py-5 bg-white text-gray-900 rounded-full font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all">
-                        Afficher en plein écran <ArrowRight size={18}/>
-                     </a>
-                  </div>
+               <div className="flex-1 min-h-[500px] bg-gray-100 dark:bg-gray-950 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-center relative overflow-hidden">
+                  {/* Utilisation d'un iframe ou img pour l'aperçu réel */}
+                  <iframe 
+                    src={previewFile.url} 
+                    className="w-full h-full border-none rounded-[2.5rem]" 
+                    title="Document Viewer"
+                    onError={() => addNotification({title: 'Erreur', message: 'Impossible d\'afficher l\'aperçu direct.', type: 'warning'})}
+                  >
+                    <div className="p-12 text-center space-y-4">
+                       <FileText size={64} className="mx-auto text-gray-300" />
+                       <p className="text-sm font-black italic text-gray-400 uppercase tracking-widest">Le navigateur ne supporte pas l'aperçu direct.</p>
+                       <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-emerald-500 font-black uppercase text-[10px] tracking-widest hover:underline">Télécharger pour voir</a>
+                    </div>
+                  </iframe>
                </div>
 
                <div className="grid grid-cols-2 gap-4">
                   <button onClick={() => { if(navigator.share) navigator.share({title: previewFile.version, url: previewFile.url}); }} className="py-4 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-gray-100 transition-all"><Share2 size={18}/> Partager</button>
-                  <a href={previewFile.url} download className="py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all"><Download size={18}/> Télécharger</a>
+                  <a href={previewFile.url} download={`${previewFile.version}.pdf`} className="py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all"><Download size={18}/> Télécharger</a>
                </div>
             </div>
          )}
