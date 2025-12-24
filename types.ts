@@ -116,6 +116,6 @@ export interface ActivityLog {
   actor: string;
   action: string;
   target: string;
-  type: 'create' | 'update' | 'delete' | 'security';
+  type: 'create' | 'update' | 'delete' | 'security' | 'insert';
   timestamp: string;
 }

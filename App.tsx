@@ -3,7 +3,6 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { NotificationProvider } from './context/NotificationContext.tsx';
-import { ChatProvider } from './context/ChatContext.tsx';
 import { Loader2 } from 'lucide-react';
 import { UserRole } from './types.ts';
 
@@ -85,12 +84,9 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <ChatProvider>
-          {/* Fix: Removed the 'future' prop from HashRouter as it is not supported by the default HashRouter types in the current environment's react-router-dom version. */}
-          <HashRouter>
-            <AppRoutes />
-          </HashRouter>
-        </ChatProvider>
+        <HashRouter>
+          <AppRoutes />
+        </HashRouter>
       </NotificationProvider>
     </AuthProvider>
   );

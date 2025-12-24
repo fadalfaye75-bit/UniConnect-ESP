@@ -11,7 +11,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserRole } from '../types';
-import GeminiChat from './GeminiChat';
 
 export const UserAvatar = React.memo(({ name, color, className = "w-10 h-10", textClassName = "text-xs" }: { name: string, color?: string, className?: string, textClassName?: string }) => {
   const initials = useMemo(() => {
@@ -272,9 +271,6 @@ export default function Layout() {
         <main className="flex-1 overflow-y-auto p-6 sm:p-12 pb-32 bg-gray-50/50 dark:bg-gray-950 custom-scrollbar animate-fade-in">
           <Outlet />
         </main>
-        
-        {/* Intégration globale de l'IA Assistant */}
-        <GeminiChat />
       </div>
     </div>
   );
