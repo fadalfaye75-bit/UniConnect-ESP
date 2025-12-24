@@ -62,6 +62,18 @@ export interface ScheduleFile {
   category: ScheduleCategory;
 }
 
+export interface ScheduleSlot {
+  id: string;
+  day: number; // 0 (Lundi) to 5 (Samedi)
+  startTime: string; // "08:00"
+  endTime: string; // "10:00"
+  subject: string;
+  teacher?: string;
+  room?: string;
+  color?: string;
+  version_id?: string;
+}
+
 export interface MeetLink {
   id: string;
   user_id?: string;

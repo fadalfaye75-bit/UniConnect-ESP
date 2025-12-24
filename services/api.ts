@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient';
-import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole, ScheduleFile } from '../types';
+import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole, ScheduleFile, ScheduleSlot } from '../types';
 
 /**
  * Extrait un message d'erreur lisible d'un objet d'erreur Supabase complexe.
@@ -287,18 +287,33 @@ export const API = {
     create: async (sch: any) => {
       const user = await API.auth.getSession();
       if (!user) throw new Error("Session expirée. Veuillez vous reconnecter.");
-      
       const { error } = await supabase.from('schedules').insert({ 
-        version: sch.version, 
-        url: sch.url, 
-        classname: sch.className, 
-        category: sch.category, 
-        user_id: user.id 
+        version: sch.version, url: sch.url, classname: sch.className, category: sch.category, user_id: user.id 
       });
-      
       if (error) handleAPIError(error, "Erreur lors de l'enregistrement du document.");
     },
-    delete: async (id: string) => { await supabase.from('schedules').delete().eq('id', id); }
+    delete: async (id: string) => { await supabase.from('schedules').delete().eq('id', id); },
+    
+    // NOUVELLES METHODES POUR L'EMPLOI DU TEMPS INTERACTIF
+    getSlots: async (className: string): Promise<ScheduleSlot[]> => {
+      const { data, error } = await supabase.from('schedule_slots').select('*').eq('classname', className);
+      if (error) return [];
+      return (data || []).map(s => ({
+        id: s.id, day: s.day, startTime: s.start_time, endTime: s.end_time, 
+        subject: s.subject, teacher: s.teacher, room: s.room, color: s.color
+      }));
+    },
+    saveSlots: async (className: string, slots: ScheduleSlot[]) => {
+      const user = await API.auth.getSession();
+      // On vide et on remplace pour simplifier (stratégie de versionnage à implémenter si besoin de logs)
+      await supabase.from('schedule_slots').delete().eq('classname', className);
+      const { error } = await supabase.from('schedule_slots').insert(slots.map(s => ({
+        day: s.day, start_time: s.startTime, end_time: s.endTime,
+        subject: s.subject, teacher: s.teacher, room: s.room, color: s.color,
+        classname: className, user_id: user?.id
+      })));
+      if (error) handleAPIError(error, "Erreur sauvegarde emploi du temps");
+    }
   },
 
   meet: {
