@@ -6,13 +6,26 @@ import { API } from '../services/api';
 import { 
   Users, BookOpen, UserPlus, Search, Loader2, School, 
   Plus, Trash2, LayoutDashboard, Shield, 
-  Ban, CheckCircle, PenSquare, Activity, Copy, Save, AlertCircle, Info, Filter, GraduationCap, Sparkles, Wand2, FileUp, CheckCircle2, AlertTriangle, Zap
+  Ban, CheckCircle, PenSquare, Activity, Copy, Save, AlertCircle, Info, Filter, GraduationCap, Sparkles, Wand2, FileUp, CheckCircle2, AlertTriangle, Zap, Palette,
+  // Fix: Added missing Check icon import
+  Check
 } from 'lucide-react';
 import { UserRole, ClassGroup, ActivityLog, User } from '../types';
 import Modal from '../components/Modal';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type TabType = 'dashboard' | 'users' | 'classes' | 'logs';
+
+const THEME_COLORS = [
+  { name: 'Bleu ESP', color: '#0ea5e9' },
+  { name: 'Émeraude', color: '#10b981' },
+  { name: 'Indigo', color: '#6366f1' },
+  { name: 'Rose', color: '#f43f5e' },
+  { name: 'Ambre', color: '#f59e0b' },
+  { name: 'Violet', color: '#8b5cf6' },
+  { name: 'Graphite', color: '#475569' },
+  { name: 'Cerise', color: '#e11d48' },
+];
 
 export default function AdminPanel() {
   const { user } = useAuth();
@@ -35,7 +48,7 @@ export default function AdminPanel() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
-  const [classFormData, setClassFormData] = useState({ id: '', name: '', email: '' });
+  const [classFormData, setClassFormData] = useState({ id: '', name: '', email: '', color: '#0ea5e9' });
   const [isEditClassMode, setIsEditClassMode] = useState(false);
 
   useEffect(() => {
@@ -85,10 +98,24 @@ export default function AdminPanel() {
       addNotification({ title: 'Données manquantes', message: 'Remplissez tous les champs.', type: 'warning' });
       return;
     }
+
+    // Vérification préventive côté client
+    const emailLower = newUser.email.trim().toLowerCase();
+    const existingUser = users.find(u => u.email.toLowerCase() === emailLower);
+    
+    if (existingUser) {
+      addNotification({ 
+        title: 'Email déjà utilisé', 
+        message: `L'email ${emailLower} est déjà associé au profil de ${existingUser.name}.`, 
+        type: 'warning' 
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       await API.auth.createUser({
-        name: newUser.fullName, email: newUser.email, role: newUser.role,
+        name: newUser.fullName, email: emailLower, role: newUser.role,
         className: newUser.className, schoolName: newUser.schoolName
       });
       await fetchGlobalData();
@@ -96,7 +123,7 @@ export default function AdminPanel() {
       setNewUser({ fullName: '', email: '', role: UserRole.STUDENT, className: '', schoolName: 'ESP Dakar' });
       addNotification({ title: 'Compte créé', message: 'Profil activé avec succès.', type: 'success' });
     } catch (error: any) {
-      addNotification({ title: 'Erreur', message: error?.message || "Impossible de créer.", type: 'alert' });
+      addNotification({ title: 'Erreur', message: error?.message || "Impossible de créer le compte.", type: 'alert' });
     } finally { setSubmitting(false); }
   };
 
@@ -115,7 +142,7 @@ export default function AdminPanel() {
       setIsEditModalOpen(false);
       addNotification({ title: 'Succès', message: 'Profil mis à jour.', type: 'success' });
     } catch (error: any) {
-      addNotification({ title: 'Erreur', message: error?.message || 'Échec.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: error?.message || 'Échec de la mise à jour.', type: 'alert' });
     } finally { setSubmitting(false); }
   };
 
@@ -127,20 +154,20 @@ export default function AdminPanel() {
   };
 
   const handleToggleStatus = async (userId: string) => {
-      if(!window.confirm("Changer le statut d'accès ?")) return;
+      if(!window.confirm("Changer le statut d'accès de cet utilisateur ?")) return;
       try {
           await API.auth.toggleUserStatus(userId);
           fetchGlobalData();
-          addNotification({ title: 'Statut mis à jour', message: 'Succès.', type: 'info' });
+          addNotification({ title: 'Statut mis à jour', message: 'Action effectuée avec succès.', type: 'info' });
       } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
   };
 
   const handleDeleteUser = async (userId: string) => {
-      if(!window.confirm("Supprimer définitivement ?")) return;
+      if(!window.confirm("Supprimer définitivement ce compte ? Cette action est irréversible.")) return;
       try {
           await API.auth.deleteUser(userId);
           fetchGlobalData();
-          addNotification({ title: 'Supprimé', message: 'Compte retiré.', type: 'info' });
+          addNotification({ title: 'Supprimé', message: 'Le compte a été retiré de la plateforme.', type: 'info' });
       } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
   };
 
@@ -149,16 +176,16 @@ export default function AdminPanel() {
       try {
           await API.classes.delete(id);
           await fetchGlobalData();
-          addNotification({ title: 'Supprimé', message: 'Classe retirée.', type: 'info' });
+          addNotification({ title: 'Supprimé', message: 'Filière retirée de la liste.', type: 'info' });
       } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
   };
 
   const openClassModal = (cls?: ClassGroup) => {
       if(cls) {
-          setClassFormData({ id: cls.id, name: cls.name, email: cls.email });
+          setClassFormData({ id: cls.id, name: cls.name, email: cls.email, color: cls.color || '#0ea5e9' });
           setIsEditClassMode(true);
       } else {
-          setClassFormData({ id: '', name: '', email: '' });
+          setClassFormData({ id: '', name: '', email: '', color: '#0ea5e9' });
           setIsEditClassMode(false);
       }
       setIsClassModalOpen(true);
@@ -168,11 +195,11 @@ export default function AdminPanel() {
       e.preventDefault();
       setSubmitting(true);
       try {
-          if(isEditClassMode) await API.classes.update(classFormData.id, { name: classFormData.name, email: classFormData.email });
-          else await API.classes.create(classFormData.name, classFormData.email);
+          if(isEditClassMode) await API.classes.update(classFormData.id, { name: classFormData.name, email: classFormData.email, color: classFormData.color });
+          else await API.classes.create(classFormData.name, classFormData.email, classFormData.color);
           await fetchGlobalData();
           setIsClassModalOpen(false);
-          addNotification({ title: 'Succès', message: 'Classe enregistrée.', type: 'success' });
+          addNotification({ title: 'Succès', message: 'Filière enregistrée avec succès.', type: 'success' });
       } catch (error: any) { addNotification({ title: 'Erreur', message: error?.message, type: 'alert' }); }
       finally { setSubmitting(false); }
   };
@@ -367,9 +394,9 @@ export default function AdminPanel() {
                         </div>
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {classesList.map(cls => (
-                                <div key={cls.id} className="group p-8 bg-gray-50 dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 hover:border-primary-400 hover:bg-white transition-all relative overflow-hidden flex flex-col">
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-primary-500/5 -mr-12 -mt-12 rounded-full group-hover:scale-125 transition-transform"></div>
-                                    <div className="p-3 bg-white dark:bg-gray-700 text-primary-500 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-600 self-start mb-6">
+                                <div key={cls.id} className="group p-8 bg-white dark:bg-gray-800 rounded-[2.5rem] border-2 shadow-soft hover:shadow-premium transition-all relative overflow-hidden flex flex-col" style={{ borderColor: cls.color || '#f3f4f6' }}>
+                                    <div className="absolute top-0 right-0 w-24 h-24 -mr-12 -mt-12 rounded-full group-hover:scale-125 transition-transform opacity-10" style={{ backgroundColor: cls.color }}></div>
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-600 self-start mb-6" style={{ color: cls.color }}>
                                         <GraduationCap size={24} />
                                     </div>
                                     <span className="text-lg font-black text-gray-900 dark:text-white leading-tight italic mb-2">{cls.name}</span>
@@ -377,8 +404,8 @@ export default function AdminPanel() {
                                         <Users size={12}/> {cls.studentCount || 0} Étudiants
                                     </div>
                                     <div className="mt-auto flex gap-2">
-                                        <button onClick={() => openClassModal(cls)} className="flex-1 p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 text-gray-400 hover:text-primary-500 rounded-xl transition-all"><PenSquare size={16} className="mx-auto" /></button>
-                                        <button onClick={() => handleDeleteClass(cls.id, cls.name)} className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 text-gray-400 hover:text-red-500 rounded-xl transition-all"><Trash2 size={16} className="mx-auto" /></button>
+                                        <button onClick={() => openClassModal(cls)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 text-gray-400 hover:text-primary-500 rounded-xl transition-all"><PenSquare size={16} className="mx-auto" /></button>
+                                        <button onClick={() => handleDeleteClass(cls.id, cls.name)} className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 text-gray-400 hover:text-red-500 rounded-xl transition-all"><Trash2 size={16} className="mx-auto" /></button>
                                     </div>
                                 </div>
                             ))}
@@ -474,9 +501,31 @@ export default function AdminPanel() {
       </Modal>
 
       <Modal isOpen={isClassModalOpen} onClose={() => setIsClassModalOpen(false)} title={isEditClassMode ? "Modifier la classe" : "Ajouter une classe"}>
-         <form onSubmit={handleClassSubmit} className="space-y-4">
-            <input required className="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Nom de la classe (ex: Licence 3 INFO)" value={classFormData.name} onChange={e => setClassFormData({...classFormData, name: e.target.value})} />
-            <input type="email" className="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Email de contact (optionnel)" value={classFormData.email} onChange={e => setClassFormData({...classFormData, email: e.target.value})} />
+         <form onSubmit={handleClassSubmit} className="space-y-6">
+            <div className="space-y-4">
+              <input required className="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Nom de la classe (ex: Licence 3 INFO)" value={classFormData.name} onChange={e => setClassFormData({...classFormData, name: e.target.value})} />
+              <input type="email" className="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold text-sm outline-none" placeholder="Email de contact (optionnel)" value={classFormData.email} onChange={e => setClassFormData({...classFormData, email: e.target.value})} />
+            </div>
+            
+            <div className="space-y-4">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                <Palette size={14} /> Couleur Officielle
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                 {THEME_COLORS.map(c => (
+                   <button 
+                    key={c.color} 
+                    type="button" 
+                    onClick={() => setClassFormData({...classFormData, color: c.color})}
+                    className={`h-10 rounded-xl transition-all flex items-center justify-center ${classFormData.color === c.color ? 'ring-2 ring-offset-2 ring-gray-900 scale-110' : 'hover:scale-105 opacity-70'}`}
+                    style={{ backgroundColor: c.color }}
+                   >
+                     {classFormData.color === c.color && <Check size={16} className="text-white" />}
+                   </button>
+                 ))}
+              </div>
+            </div>
+
             <button disabled={submitting} type="submit" className="w-full bg-primary-500 hover:bg-primary-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/20 uppercase tracking-widest transition-all">
                 {submitting ? <Loader2 className="animate-spin" size={18}/> : (isEditClassMode ? "Enregistrer" : "Créer la section")}
             </button>

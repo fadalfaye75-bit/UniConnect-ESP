@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserAvatar } from '../components/Layout';
-import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin } from 'lucide-react';
-import { Announcement, ScheduleFile } from '../types';
+import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin, School } from 'lucide-react';
+import { Announcement, ScheduleFile, ClassGroup } from '../types';
 
 const THEME_COLORS = [
   { name: 'Bleu ESP', color: '#0ea5e9' },
@@ -29,6 +29,7 @@ export default function Profile() {
   
   const [personalInfo, setPersonalInfo] = useState({ name: '', schoolName: '', themeColor: '#0ea5e9' });
   const [passwords, setPasswords] = useState({ newPassword: '', confirmPassword: '' });
+  const [userClass, setUserClass] = useState<ClassGroup | null>(null);
   
   const [favoriteItems, setFavoriteItems] = useState<{
     announcements: Announcement[],
@@ -41,6 +42,12 @@ export default function Profile() {
         name: user.name, 
         schoolName: user.schoolName || 'ESP Dakar',
         themeColor: user.themeColor || '#0ea5e9'
+      });
+      
+      // Récupérer les détails de la classe pour suggérer la couleur
+      API.classes.list().then(list => {
+        const found = list.find(c => c.name === user.className);
+        if (found) setUserClass(found);
       });
     }
   }, [user]);
@@ -83,7 +90,7 @@ export default function Profile() {
         schoolName: personalInfo.schoolName,
         themeColor: personalInfo.themeColor
       });
-      addNotification({ title: 'Succès', message: 'Profil mis à jour.', type: 'success' });
+      addNotification({ title: 'Succès', message: 'Profil mis à jour. Vos annonces porteront désormais cette couleur.', type: 'success' });
     } catch (error) {
       addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     } finally {
@@ -180,20 +187,45 @@ export default function Profile() {
 
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white dark:bg-gray-900 rounded-[3.5rem] shadow-soft border border-gray-100 dark:border-gray-800 p-10">
-              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-10 uppercase tracking-widest flex items-center gap-3 italic">
-                <Palette size={24} style={{ color: personalInfo.themeColor }} /> Thème Personnalisé
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6 uppercase tracking-widest flex items-center gap-3 italic">
+                <Palette size={24} style={{ color: personalInfo.themeColor }} /> Thème & Identité Visuelle
               </h3>
-              <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 mb-12">
-                {THEME_COLORS.map((t) => (
-                  <button
-                    key={t.color}
-                    onClick={() => setPersonalInfo({...personalInfo, themeColor: t.color})}
-                    className={`relative h-12 rounded-xl transition-all flex items-center justify-center group ${personalInfo.themeColor === t.color ? 'ring-4 ring-offset-4 ring-gray-100 scale-110 shadow-lg' : 'hover:scale-105 shadow-sm'}`}
-                    style={{ backgroundColor: t.color }}
-                  >
-                    {personalInfo.themeColor === t.color && <Check size={20} className="text-white" />}
-                  </button>
-                ))}
+              
+              <div className="mb-10 space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 ml-1">Couleurs Disponibles</label>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+                    {THEME_COLORS.map((t) => (
+                      <button
+                        key={t.color}
+                        onClick={() => setPersonalInfo({...personalInfo, themeColor: t.color})}
+                        className={`relative h-12 rounded-xl transition-all flex items-center justify-center group ${personalInfo.themeColor === t.color ? 'ring-4 ring-offset-4 ring-gray-100 scale-110 shadow-lg' : 'hover:scale-105 shadow-sm'}`}
+                        style={{ backgroundColor: t.color }}
+                      >
+                        {personalInfo.themeColor === t.color && <Check size={20} className="text-white" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {userClass && userClass.color && (
+                  <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center gap-6 group">
+                     <div className="w-16 h-16 rounded-2xl shadow-lg flex items-center justify-center text-white shrink-0" style={{ backgroundColor: userClass.color }}>
+                        <School size={32} />
+                     </div>
+                     <div className="flex-1 text-center sm:text-left">
+                        <h4 className="text-sm font-black italic text-gray-900 dark:text-white uppercase tracking-tight">Thème de votre filière</h4>
+                        <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest">Utilisez la couleur officielle de la {userClass.name}.</p>
+                     </div>
+                     <button 
+                        type="button" 
+                        onClick={() => setPersonalInfo({...personalInfo, themeColor: userClass.color!})}
+                        className="px-6 py-3 bg-white dark:bg-gray-700 text-[10px] font-black uppercase tracking-widest rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:bg-gray-900 hover:text-white transition-all active:scale-95"
+                     >
+                       Appliquer
+                     </button>
+                  </div>
+                )}
               </div>
 
               <form onSubmit={handleInfoChange} className="space-y-8">

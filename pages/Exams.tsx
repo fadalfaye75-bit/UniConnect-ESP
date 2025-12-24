@@ -33,7 +33,7 @@ export default function Exams() {
     className: ''
   });
 
-  const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const canPost = API.auth.canPost(user);
   const isAdmin = user?.role === UserRole.ADMIN;
 
   useEffect(() => {
@@ -172,7 +172,7 @@ export default function Exams() {
            </div>
         </div>
         
-        {canManage && (
+        {canPost && (
           <button 
             onClick={openNewModal} 
             className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gray-900 text-white px-10 py-5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all italic hover:bg-black"
@@ -205,7 +205,10 @@ export default function Exams() {
         {displayedExams.map((exam) => {
           const examDate = new Date(exam.date);
           const isPassed = examDate < new Date();
-          const canModify = isAdmin || exam.user_id === user?.id;
+          
+          // Droits d'édition et suppression synchronisés RLS
+          const canEdit = API.auth.canEdit(user, exam);
+          const canDelete = API.auth.canDelete(user);
           
           return (
             <div key={exam.id} className={`group relative bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border-2 transition-all duration-500 flex flex-col md:flex-row gap-10 ${
@@ -256,12 +259,8 @@ export default function Exams() {
               <div className="flex md:flex-col items-center justify-center gap-2 p-6 md:p-0 md:pl-10 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800">
                  <button onClick={() => handleCopy(exam)} className="p-3.5 bg-gray-900 text-white rounded-2xl hover:scale-110 transition-all shadow-lg active:scale-90" title="Copier les détails"><Copy size={20}/></button>
                  <button onClick={() => { if(navigator.share) navigator.share({title: exam.subject, text: `${exam.subject} - ${examDate.toLocaleString()} - Salle ${exam.room}`}); }} className="p-3.5 bg-orange-50 text-orange-500 rounded-2xl hover:bg-orange-500 hover:text-white transition-all active:scale-90" title="Partager"><Share2 size={20}/></button>
-                 {canModify && (
-                   <>
-                     <button onClick={() => handleEdit(exam)} className="p-3.5 bg-blue-50 text-blue-500 rounded-2xl hover:bg-blue-500 hover:text-white transition-all active:scale-90" title="Éditer"><Pencil size={20}/></button>
-                     <button onClick={() => handleDelete(exam.id)} className="p-3.5 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-90" title="Supprimer"><Trash2 size={20}/></button>
-                   </>
-                 )}
+                 {canEdit && <button onClick={() => handleEdit(exam)} className="p-3.5 bg-blue-50 text-blue-500 rounded-2xl hover:bg-blue-500 hover:text-white transition-all active:scale-90" title="Éditer"><Pencil size={20}/></button>}
+                 {canDelete && <button onClick={() => handleDelete(exam.id)} className="p-3.5 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-90" title="Supprimer"><Trash2 size={20}/></button>}
               </div>
             </div>
           );

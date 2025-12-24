@@ -35,6 +35,7 @@ export interface Announcement {
   priority: AnnouncementPriority;
   links?: ExternalLink[];
   attachments?: string[];
+  color?: string; // Couleur thématique de l'annonce (souvent celle de l'auteur ou de la classe)
 }
 
 export interface Exam {
@@ -97,6 +98,7 @@ export interface ClassGroup {
   name: string;
   email: string;
   studentCount: number;
+  color?: string; // Couleur officielle de la filière
 }
 
 export interface AppNotification {

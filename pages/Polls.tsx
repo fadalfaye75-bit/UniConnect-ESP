@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Trash2, X, Lock, Unlock, Loader2, Pencil, Timer, Clock, CheckCircle2, BarChart2, Check, TrendingUp, Users, Search, Vote, AlertTriangle, Sparkles, Filter, FilterX, Shield, Award, Calendar, RefreshCcw, ChevronDown, ChevronUp, Trophy, Radio, Power, Share2, Send, BarChart as BarChartIcon, PieChart as PieChartIcon, Maximize2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +44,7 @@ export default function Polls() {
   });
 
   const isAdmin = user?.role === UserRole.ADMIN;
-  const canManageAtAll = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const canPost = API.auth.canPost(user);
 
   const fetchPolls = useCallback(async (showLoader = false) => {
     try {
@@ -51,7 +52,6 @@ export default function Polls() {
       const data = await API.polls.list();
       setPolls(data);
       
-      // Mettre à jour le sondage en cours de visualisation si nécessaire
       if (viewingPoll) {
         const updated = data.find(p => p.id === viewingPoll.id);
         if (updated) setViewingPoll(updated);
@@ -94,6 +94,27 @@ export default function Polls() {
         return next;
       });
       setTimeout(() => setVotedOptionId(null), 600);
+    }
+  };
+
+  const handleToggleStatus = async (poll: Poll) => {
+    try {
+      await API.polls.update(poll.id, { isActive: !poll.isActive });
+      fetchPolls(false);
+      addNotification({ title: 'Statut mis à jour', message: poll.isActive ? 'Scrutin clos.' : 'Scrutin réouvert.', type: 'info' });
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Impossible de changer le statut.', type: 'alert' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Supprimer ce sondage et tous les votes associés ?")) return;
+    try {
+      await API.polls.delete(id);
+      fetchPolls(false);
+      addNotification({ title: 'Supprimé', message: 'Consultation retirée.', type: 'info' });
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Suppression impossible.', type: 'alert' });
     }
   };
 
@@ -174,7 +195,7 @@ export default function Polls() {
               </p>
            </div>
         </div>
-        {canManageAtAll && (
+        {canPost && (
           <button 
             onClick={() => setIsModalOpen(true)} 
             className="group relative w-full sm:w-auto overflow-hidden bg-gray-900 text-white px-14 py-6 rounded-[2.2rem] text-[11px] font-black uppercase tracking-[0.2em] shadow-premium active:scale-95 transition-all italic"
@@ -215,7 +236,11 @@ export default function Polls() {
 
       {/* Grid des Sondages */}
       <div className="grid gap-16">
-        {displayedPolls.map(poll => (
+        {displayedPolls.map(poll => {
+          const canEdit = API.auth.canEdit(user, poll);
+          const canDelete = API.auth.canDelete(user);
+          
+          return (
             <div key={poll.id} className="group relative bg-white dark:bg-gray-900 rounded-[4.5rem] p-12 lg:p-16 shadow-soft border border-gray-100 dark:border-gray-800 hover:shadow-premium transition-all duration-700 overflow-hidden">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-2 rounded-b-full opacity-40" style={{ backgroundColor: poll.isActive ? themeColor : '#94a3b8' }} />
               
@@ -226,19 +251,30 @@ export default function Polls() {
                     </span>
                     <span className="text-xs font-black text-primary-500 uppercase tracking-[0.3em] italic">{poll.className}</span>
                  </div>
-                 <button 
-                  onClick={() => setViewingPoll(poll)}
-                  className="flex items-center gap-4 px-8 py-3 bg-gray-50 dark:bg-gray-800 rounded-3xl text-[12px] font-black text-gray-900 dark:text-white italic tracking-tight shadow-inner-soft hover:bg-gray-100 transition-all group/btn"
-                 >
-                    <BarChartIcon size={18} className="text-gray-400 group-hover/btn:text-primary-500 transition-colors" /> Détails & Stats
-                 </button>
+                 <div className="flex gap-2">
+                    <button 
+                      onClick={() => setViewingPoll(poll)}
+                      className="flex items-center gap-4 px-8 py-3 bg-gray-50 dark:bg-gray-800 rounded-3xl text-[12px] font-black text-gray-900 dark:text-white italic tracking-tight shadow-inner-soft hover:bg-gray-100 transition-all group/btn"
+                    >
+                        <BarChartIcon size={18} className="text-gray-400 group-hover/btn:text-primary-500 transition-colors" /> Stats
+                    </button>
+                    {canEdit && (
+                      <button onClick={() => handleToggleStatus(poll)} className={`p-3 rounded-2xl transition-all ${poll.isActive ? 'bg-amber-50 text-amber-500' : 'bg-green-50 text-green-500'}`}>
+                        {poll.isActive ? <Lock size={20}/> : <Unlock size={20}/>}
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button onClick={() => handleDelete(poll.id)} className="p-3 bg-red-50 text-red-500 rounded-2xl">
+                        <Trash2 size={20}/>
+                      </button>
+                    )}
+                 </div>
               </div>
 
               <h3 className="text-4xl md:text-5xl font-black italic tracking-tighter mb-16 text-gray-900 dark:text-white leading-[1.1] text-center max-w-4xl mx-auto cursor-pointer" onClick={() => setViewingPoll(poll)}>
                 {poll.question}
               </h3>
 
-              {/* Barre de progression globale résumée */}
               <div className="h-4 w-full bg-gray-100 dark:bg-gray-800 rounded-full mb-16 overflow-hidden flex">
                 {poll.options.map((opt, idx) => (
                   <div 
@@ -304,7 +340,7 @@ export default function Polls() {
                                <span className="text-[12px] font-black text-gray-400 uppercase tracking-widest">%</span>
                             </div>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-2 opacity-60">
-                               {option.votes} {option.votes > 1 ? 'voix' : 'voix'}
+                               {option.votes} voix
                             </p>
                         </div>
                     </button>
@@ -318,10 +354,10 @@ export default function Polls() {
                 </div>
               )}
             </div>
-        ))}
+        )})}
       </div>
 
-      {/* Modal Détails & Stats */}
+      {/* Modals existants (Analyse/Création) */}
       <Modal isOpen={!!viewingPoll} onClose={() => setViewingPoll(null)} title="Analyse de la consultation">
         {viewingPoll && (
           <div className="space-y-12 pb-6">
@@ -344,7 +380,6 @@ export default function Polls() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      /* Fix: Added type casting to avoid "Index signature missing" error in Recharts data prop */
                       data={viewingPoll.options as any[]}
                       dataKey="votes"
                       nameKey="label"
@@ -379,24 +414,6 @@ export default function Polls() {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Classement actuel</h4>
-              <div className="space-y-3">
-                {viewingPoll.options.sort((a, b) => b.votes - a.votes).map((opt, i) => (
-                  <div key={opt.id} className="flex items-center justify-between p-5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center font-black italic text-gray-400">#{i+1}</div>
-                      <span className="font-black italic text-gray-900 dark:text-white">{opt.label}</span>
-                    </div>
-                    <div className="text-right">
-                       <span className="text-xl font-black italic text-primary-500">{opt.votes}</span>
-                       <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">voix</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
             
             <button 
               onClick={() => setViewingPoll(null)}
@@ -408,7 +425,6 @@ export default function Polls() {
         )}
       </Modal>
 
-      {/* Modal Création */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Lancer une consultation officielle">
         <form onSubmit={handleCreatePoll} className="space-y-10">
           <div>

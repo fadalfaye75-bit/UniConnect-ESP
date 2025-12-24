@@ -131,24 +131,27 @@ export default function Dashboard() {
           </div>
           
           <div className="space-y-6">
-              {data.anns.length > 0 ? data.anns.map((ann) => (
-                  <div key={ann.id} onClick={() => navigate('/announcements')} className="group bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] shadow-soft border border-gray-50 dark:border-gray-800 transition-all hover:shadow-xl cursor-pointer flex gap-8 relative overflow-hidden">
-                    <div className="w-1.5 h-full absolute left-0 top-0" style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : themeColor }} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${ann.priority === 'urgent' ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-500'}`}>{ann.priority}</span>
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest italic">{new Date(ann.date).toLocaleDateString()}</span>
+              {data.anns.length > 0 ? data.anns.map((ann) => {
+                  const annColor = ann.color || themeColor;
+                  return (
+                    <div key={ann.id} onClick={() => navigate('/announcements')} className="group bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.02] hover:shadow-premium transition-all duration-300 cursor-pointer flex gap-8 relative overflow-hidden">
+                      <div className="w-1.5 h-full absolute left-0 top-0" style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : (ann.priority === 'important' ? '#f59e0b' : annColor) }} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${ann.priority === 'urgent' ? 'bg-rose-500 text-white' : (ann.priority === 'important' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500')}`}>{ann.priority}</span>
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest italic">{new Date(ann.date).toLocaleDateString()}</span>
+                        </div>
+                        <h4 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter leading-tight group-hover:text-primary-500 transition-colors" style={{ color: ann.priority === 'normal' ? '' : '' }}>
+                          {ann.title}
+                        </h4>
+                        <p className="text-sm text-gray-500 mt-3 line-clamp-2 italic">{ann.content}</p>
                       </div>
-                      <h4 className="text-xl font-black text-gray-900 dark:text-white italic tracking-tighter leading-tight group-hover:text-primary-500 transition-colors">
-                        {ann.title}
-                      </h4>
-                      <p className="text-sm text-gray-500 mt-3 line-clamp-2 italic">{ann.content}</p>
+                      <div className="hidden sm:flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl">
+                          <Maximize2 size={20} className="text-gray-300 group-hover:text-primary-500 transition-all" />
+                      </div>
                     </div>
-                    <div className="hidden sm:flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl">
-                        <Maximize2 size={20} className="text-gray-300 group-hover:text-primary-500 transition-all" />
-                    </div>
-                  </div>
-              )) : (
+                  );
+              }) : (
                 <div className="py-20 text-center bg-white dark:bg-gray-900 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                   <Inbox className="mx-auto text-gray-200 mb-4" size={40} />
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic">Aucune annonce récente</p>

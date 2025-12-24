@@ -40,7 +40,7 @@ export default function Schedule() {
   const [newFileVersion, setNewFileVersion] = useState('');
 
   const isAdmin = user?.role === UserRole.ADMIN;
-  const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+  const canPost = API.auth.canPost(user);
 
   const fetchSchedules = useCallback(async (isRefresh = false) => {
     try {
@@ -171,7 +171,7 @@ export default function Schedule() {
           <button onClick={() => setShowOnlyFavorites(!showOnlyFavorites)} className={`p-5 rounded-2xl transition-all shadow-lg active:scale-95 ${showOnlyFavorites ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-900 text-gray-400 border border-gray-100 dark:border-gray-800'}`}>
             <Star size={24} className={showOnlyFavorites ? 'fill-current' : ''} />
           </button>
-          {canManage && (
+          {canPost && (
             <button onClick={() => setShowUploadModal(true)} className="flex items-center justify-center gap-3 bg-gray-900 text-white px-10 py-5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all italic hover:bg-black">
                <Upload size={20} /> Diffuser un fichier
             </button>
@@ -197,7 +197,8 @@ export default function Schedule() {
       {/* Results Grid */}
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {displayedSchedules.map((sch) => {
-          const canDelete = isAdmin || sch.user_id === user?.id;
+          // Suppression réservée aux administrateurs (sync RLS)
+          const canDelete = API.auth.canDelete(user);
           const style = CATEGORY_STYLES[sch.category] || CATEGORY_STYLES['Autre'];
           const CatIcon = style.icon;
 
