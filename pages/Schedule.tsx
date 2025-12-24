@@ -33,14 +33,14 @@ export default function Schedule() {
     try {
       if (isInitial) setLoading(true);
       const data = await API.schedules.list();
-      // On ne garde que les documents de catégorie "Planning"
+      // Filtrage strict : on n'affiche que les plannings
       const filteredData = data.filter(s => s.category === 'Planning');
       setSchedules(filteredData);
       
       const favs = await API.favorites.list();
       setFavoriteIds(new Set(favs.filter(f => f.content_type === 'schedule').map(f => f.content_id)));
     } catch (error) {
-      addNotification({ title: 'Erreur', message: 'Impossible de synchroniser les archives.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Impossible de synchroniser les plannings.', type: 'alert' });
     } finally {
       if (isInitial) setLoading(false);
     }
@@ -53,7 +53,6 @@ export default function Schedule() {
   const displayedSchedules = useMemo(() => {
     return schedules.filter(sch => {
       const target = sch.className || 'Général';
-      // Filtrage par accès classe
       if (!isAdmin && target !== 'Général' && target !== user?.className) return false;
       
       const matchesSearch = sch.version.toLowerCase().includes(searchTerm.toLowerCase());
@@ -63,7 +62,6 @@ export default function Schedule() {
     });
   }, [user, isAdmin, schedules, searchTerm, favoriteIds, showOnlyFavorites]);
 
-  // Calcul du badge "Dernière version"
   const latestVersions = useMemo(() => {
     const map = new Map<string, string>();
     schedules.forEach(s => {
@@ -79,30 +77,28 @@ export default function Schedule() {
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFile.file || !newFile.title) {
-      addNotification({ title: 'Manquant', message: 'Fichier et titre obligatoires.', type: 'warning' });
+      addNotification({ title: 'Manquant', message: 'Fichier et titre requis.', type: 'warning' });
       return;
     }
 
     setUploading(true);
     try {
       const targetClass = user?.className || 'Général';
-      
-      // Calcul auto de la version (V1, V2...)
       const sameTypeCount = schedules.filter(s => s.className === targetClass).length;
       const versionLabel = `${newFile.title} (V${sameTypeCount + 1})`;
 
-      // Simulation upload Supabase Storage
-      await new Promise(r => setTimeout(r, 1200));
-      const mockUrl = `https://uniconnect.storage/esp/${targetClass}/${newFile.file.name}`;
+      // Simulation Supabase Storage
+      await new Promise(r => setTimeout(r, 1500));
+      const mockUrl = `https://uniconnect.storage/esp/planning/${targetClass}/${newFile.file.name}`;
 
       await API.schedules.create({
         version: versionLabel,
         url: mockUrl,
         className: targetClass,
-        category: 'Planning' // Forcé à Planning
+        category: 'Planning'
       });
 
-      addNotification({ title: 'Succès', message: `Le planning ${versionLabel} est en ligne.`, type: 'success' });
+      addNotification({ title: 'Publié', message: `Le planning hebdomadaire ${versionLabel} est en ligne.`, type: 'success' });
       setShowUploadModal(false);
       setNewFile({ title: '', file: null });
       fetchSchedules();
@@ -127,37 +123,37 @@ export default function Schedule() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Archiver définitivement ce planning ?")) return;
+    if (!window.confirm("Archiver ce planning ?")) return;
     try {
       await API.schedules.delete(id);
       fetchSchedules();
-      addNotification({ title: 'Archivé', message: 'Le planning a été retiré.', type: 'info' });
+      addNotification({ title: 'Archivé', message: 'Document retiré avec succès.', type: 'info' });
     } catch (e) {
-      addNotification({ title: 'Erreur', message: 'Action interdite.', type: 'alert' });
+      addNotification({ title: 'Erreur', message: 'Action refusée.', type: 'alert' });
     }
   };
 
   if (loading) return (
-    <div className="flex flex-col justify-center items-center h-full gap-6">
-        <Loader2 className="animate-spin text-primary-500" size={40} />
+    <div className="flex flex-col justify-center items-center h-[60vh] gap-6">
+        <Loader2 className="animate-spin text-emerald-500" size={40} />
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest animate-pulse italic">Synchronisation des plannings...</p>
     </div>
   );
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
+    <div className="max-w-6xl mx-auto space-y-12 pb-32 animate-fade-in custom-scrollbar">
       {/* Header Premium */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 border-b border-gray-100 dark:border-gray-800 pb-12">
         <div className="flex items-center gap-6">
-           <div className="w-20 h-20 text-white rounded-[2rem] flex items-center justify-center shadow-premium rotate-3 relative overflow-hidden group" style={{ backgroundColor: '#10b981' }}>
+           <div className="w-20 h-20 text-white rounded-[2.2rem] flex items-center justify-center shadow-premium rotate-3 relative overflow-hidden group" style={{ backgroundColor: '#10b981' }}>
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
               <CalendarDays size={36} className="relative z-10" />
            </div>
            <div>
-              <h2 className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Plannings</h2>
+              <h2 className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Planning</h2>
               <div className="flex items-center gap-3 mt-4">
                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                   <ShieldCheck size={12}/> Emplois du Temps
+                   <ShieldCheck size={12}/> Emplois du Temps Officiels
                  </span>
                  <span className="w-1 h-1 bg-gray-300 rounded-full" />
                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">{user?.className}</span>
@@ -178,33 +174,32 @@ export default function Schedule() {
               className="group relative overflow-hidden bg-gray-900 text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] shadow-premium active:scale-95 transition-all italic"
             >
                <div className="absolute inset-0 bg-white/10 -translate-x-full group-hover:translate-x-0 transition-transform duration-500"></div>
-               <span className="relative z-10 flex items-center gap-3"><Upload size={18} /> Diffuser un planning</span>
+               <span className="relative z-10 flex items-center gap-3"><Upload size={18} /> Diffuser une semaine</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Barre de Recherche */}
-      <div className="flex flex-col lg:flex-row gap-4 bg-white dark:bg-gray-900 p-4 rounded-[2.5rem] shadow-soft border border-gray-50 dark:border-gray-800">
-        <div className="relative flex-1 group">
+      {/* Barre de Recherche Sticky */}
+      <div className="bg-white/80 dark:bg-gray-900/80 sticky-header p-4 rounded-[2.5rem] shadow-soft border border-gray-50 dark:border-gray-800 sticky top-4 z-20">
+        <div className="relative group">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" size={20} />
           <input 
-            type="text" placeholder="Rechercher par semaine ou titre..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            type="text" placeholder="Rechercher par date ou titre de semaine..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-16 pr-6 py-4 bg-transparent border-none rounded-2xl text-sm font-bold italic outline-none"
           />
         </div>
       </div>
 
-      {/* Grid des documents */}
+      {/* Grid des Plannings avec Staggered Animation */}
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {displayedSchedules.map((sch) => {
+        {displayedSchedules.map((sch, idx) => {
           const isLatest = latestVersions.has(sch.id);
           const isFav = favoriteIds.has(sch.id);
 
           return (
-            <div key={sch.id} className={`group relative bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 transition-all duration-500 flex flex-col overflow-hidden ${isLatest ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-transparent'}`}>
-                {/* Overlay déco */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 dark:bg-gray-800 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000 opacity-20"></div>
+            <div key={sch.id} className={`stagger-item stagger-${(idx % 3) + 1} group relative bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 transition-all duration-500 flex flex-col overflow-hidden ${isLatest ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-transparent hover:border-gray-100 dark:hover:border-gray-800'}`}>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-900/10 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-1000 opacity-20"></div>
                 
                 <div className="flex justify-between items-start mb-10 relative z-10">
                     <div className="p-5 bg-emerald-50 text-emerald-600 rounded-[1.8rem] shadow-sm transform group-hover:-rotate-6 transition-transform">
@@ -218,19 +213,13 @@ export default function Schedule() {
 
                 <div className="flex-1 relative z-10 space-y-4">
                   <div className="flex items-center gap-3">
-                     <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600">
-                        Planning Hebdo
-                     </span>
-                     {isLatest && (
-                       <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 bg-emerald-500 text-white rounded-lg animate-pulse">
-                         ACTUEL
-                       </span>
-                     )}
+                     <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600">Planning Hebdo</span>
+                     {isLatest && <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 bg-emerald-500 text-white rounded-lg animate-pulse">ACTUEL</span>}
                   </div>
                   <h3 className="text-2xl font-black text-gray-900 dark:text-white leading-tight italic tracking-tighter line-clamp-2">{sch.version}</h3>
                   <div className="flex flex-col gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                      <div className="flex items-center gap-2"><History size={12}/> {new Date(sch.uploadDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div>
-                     <div className="flex items-center gap-2"><ShieldCheck size={12}/> {sch.className || 'Global'}</div>
+                     <div className="flex items-center gap-2"><ShieldCheck size={12}/> {sch.className || 'ESP'}</div>
                   </div>
                 </div>
 
@@ -255,28 +244,27 @@ export default function Schedule() {
         {displayedSchedules.length === 0 && (
            <div className="sm:col-span-2 lg:col-span-3 py-32 text-center bg-white dark:bg-gray-900 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
               <History size={48} className="mx-auto text-gray-100 mb-6" />
-              <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic opacity-50">Aucun planning hebdomadaire disponible</p>
+              <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic opacity-50">Aucun planning disponible pour cette section</p>
            </div>
         )}
       </div>
 
-      {/* Modal Upload */}
-      <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Diffuser un planning hebdomadaire">
+      <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Diffuser une semaine">
          <form onSubmit={handleFileUpload} className="space-y-8">
             <div className={`p-12 border-4 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center gap-6 transition-all relative group bg-gray-50/50 dark:bg-gray-800/30 ${newFile.file ? 'border-emerald-400' : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300'}`}>
                {uploading ? (
                  <div className="flex flex-col items-center gap-4">
                     <Loader2 size={64} className="text-emerald-500 animate-spin" />
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest animate-pulse">Indexation en cours...</p>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest animate-pulse">Indexation sécurisée...</p>
                  </div>
                ) : (
                  <>
                    <Upload size={64} className={`${newFile.file ? 'text-emerald-500' : 'text-gray-200'} group-hover:scale-110 transition-transform`} />
                    <div className="text-center">
                      <p className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-widest mb-2">
-                       {newFile.file ? newFile.file.name : 'Sélectionner le planning'}
+                       {newFile.file ? newFile.file.name : 'Déposer le planning'}
                      </p>
-                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">PDF, Excel ou Image (Max 10Mo)</p>
+                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Format PDF ou Image recommandé (Max 10Mo)</p>
                    </div>
                  </>
                )}
@@ -289,25 +277,24 @@ export default function Schedule() {
             
             <div className="space-y-5">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Titre de la semaine</label>
-                <input required value={newFile.title} onChange={e => setNewFile({...newFile, title: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold italic text-sm outline-none border-none shadow-inner-soft" placeholder="ex: Semaine du 12 au 17 Juin" />
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Référence Temporelle</label>
+                <input required value={newFile.title} onChange={e => setNewFile({...newFile, title: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-bold italic text-sm outline-none border-none shadow-inner-soft focus:ring-4 focus:ring-emerald-50" placeholder="ex: Semaine du 12 Juin" />
               </div>
             </div>
 
             <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-3xl flex gap-5 border border-emerald-100 dark:border-emerald-800">
                <ShieldCheck size={28} className="shrink-0" />
-               <p className="text-[10px] font-bold italic leading-relaxed uppercase tracking-tight">Le système créera automatiquement une version V+1 si un planning existe déjà pour votre classe cette semaine.</p>
+               <p className="text-[10px] font-bold italic leading-relaxed uppercase tracking-tight">Le système archive automatiquement les anciennes versions pour conserver un historique complet.</p>
             </div>
 
-            <button type="submit" disabled={uploading || !newFile.file} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[2rem] uppercase italic tracking-widest shadow-xl active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3">
+            <button type="submit" disabled={uploading || !newFile.file} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[2.5rem] uppercase italic tracking-widest shadow-xl active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3">
               {uploading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
               <span>Lancer la diffusion</span>
             </button>
          </form>
       </Modal>
 
-      {/* Modal Preview */}
-      <Modal isOpen={!!previewFile} onClose={() => setPreviewFile(null)} title="Aperçu du Planning">
+      <Modal isOpen={!!previewFile} onClose={() => setPreviewFile(null)} title="Consultation Planning">
          {previewFile && (
             <div className="space-y-8 animate-fade-in">
                <div className="flex items-center gap-5 p-6 bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
@@ -321,12 +308,11 @@ export default function Schedule() {
                <div className="aspect-[4/5] bg-gray-100 dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-center relative overflow-hidden group">
                   <div className="text-center p-12 space-y-4">
                      <FileText size={64} className="mx-auto text-gray-300 animate-pulse" />
-                     <p className="text-sm font-black italic text-gray-400 uppercase tracking-widest leading-relaxed">Le visualiseur sécurisé UniConnect charge votre planning...</p>
+                     <p className="text-sm font-black italic text-gray-400 uppercase tracking-widest leading-relaxed">Chargement du document sécurisé...</p>
                   </div>
-                  {/* Overlay Action */}
                   <div className="absolute inset-0 bg-gray-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                      <a href={previewFile.url} target="_blank" rel="noreferrer" className="px-10 py-5 bg-white text-gray-900 rounded-full font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all">
-                        Ouvrir en plein écran <ArrowRight size={18}/>
+                        Afficher en plein écran <ArrowRight size={18}/>
                      </a>
                   </div>
                </div>

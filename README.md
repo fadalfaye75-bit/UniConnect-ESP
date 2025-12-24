@@ -1,10 +1,90 @@
 
 # UniConnect ESP - Configuration SQL Complète
 
-Exécutez ce script pour initialiser la gestion des documents, des sondages et la sécurité par classe.
+Exécutez ce script dans votre SQL Editor Supabase. Ce script est **idempotent** (peut être exécuté plusieurs fois sans erreur).
 
 ```sql
--- 1. Tables Sondages
+-- 1. Table Profiles
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  name text,
+  email text,
+  role text DEFAULT 'STUDENT',
+  classname text DEFAULT 'Général',
+  school_name text DEFAULT 'ESP Dakar',
+  is_active boolean DEFAULT true,
+  theme_color text DEFAULT '#0ea5e9',
+  avatar text
+);
+
+-- 2. Table Notifications & Correction RLS
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  message text NOT NULL,
+  type text DEFAULT 'info',
+  target_user_id uuid REFERENCES auth.users ON DELETE CASCADE,
+  target_role text,
+  target_class text,
+  is_read boolean DEFAULT false,
+  link text,
+  timestamp timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- Nettoyage et Réinstallation des Politiques Notifications
+DROP POLICY IF EXISTS "Users can see relevant notifications" ON public.notifications;
+CREATE POLICY "Users can see relevant notifications" ON public.notifications
+FOR SELECT USING (
+  auth.uid() = target_user_id OR 
+  target_user_id IS NULL OR
+  target_class = 'Général' OR
+  target_class = (SELECT classname FROM profiles WHERE id = auth.uid())
+);
+
+DROP POLICY IF EXISTS "Allow authenticated to insert notifications" ON public.notifications;
+CREATE POLICY "Allow authenticated to insert notifications" ON public.notifications
+FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Users can mark own notifications as read" ON public.notifications;
+CREATE POLICY "Users can mark own notifications as read" ON public.notifications
+FOR UPDATE USING (auth.uid() = target_user_id) WITH CHECK (auth.uid() = target_user_id);
+
+-- 3. Table Plannings (Schedules)
+CREATE TABLE IF NOT EXISTS public.schedules (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users ON DELETE CASCADE,
+  version text NOT NULL,
+  upload_date timestamptz DEFAULT now(),
+  url text NOT NULL,
+  classname text NOT NULL,
+  category text DEFAULT 'Planning'
+);
+
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Schedules viewable by class members" ON public.schedules;
+CREATE POLICY "Schedules viewable by class members" ON public.schedules
+FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE profiles.id = auth.uid()
+    AND (profiles.classname = public.schedules.classname OR profiles.role = 'ADMIN' OR public.schedules.classname = 'Général')
+  )
+);
+
+DROP POLICY IF EXISTS "Authorized can upload schedules" ON public.schedules;
+CREATE POLICY "Authorized can upload schedules" ON public.schedules
+FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE profiles.id = auth.uid()
+    AND (profiles.role = 'ADMIN' OR profiles.role = 'DELEGATE')
+  )
+);
+
+-- 4. Sondages (Polls) & Logique de Vote
 CREATE TABLE IF NOT EXISTS public.polls (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES auth.users ON DELETE CASCADE,
@@ -32,97 +112,43 @@ CREATE TABLE IF NOT EXISTS public.poll_votes (
   UNIQUE(poll_id, user_id)
 );
 
--- 2. Activation RLS
 ALTER TABLE public.polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.poll_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.poll_votes ENABLE ROW LEVEL SECURITY;
 
--- 3. Politiques de sécurité
+DROP POLICY IF EXISTS "Polls visible to all" ON public.polls;
+CREATE POLICY "Polls visible to all" ON public.polls FOR SELECT USING (true);
 
--- POLLS
-CREATE POLICY "Polls viewable by class members" ON public.polls
-FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE profiles.id = auth.uid()
-    AND (profiles.classname = public.polls.classname OR profiles.role = 'ADMIN' OR public.polls.classname = 'Général')
-  )
+DROP POLICY IF EXISTS "Admins/Delegates can manage polls" ON public.polls;
+CREATE POLICY "Admins/Delegates can manage polls" ON public.polls FOR ALL USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'DELEGATE'))
 );
 
-CREATE POLICY "Delegates can insert polls for their class" ON public.polls
-FOR INSERT WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE profiles.id = auth.uid()
-    AND (profiles.role = 'ADMIN' OR (profiles.role = 'DELEGATE' AND profiles.classname = classname))
-  )
-);
+DROP POLICY IF EXISTS "Votes visible only to owner" ON public.poll_votes;
+CREATE POLICY "Votes visible only to owner" ON public.poll_votes FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Delegates or Admins can update their polls" ON public.polls
-FOR UPDATE USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE profiles.id = auth.uid()
-    AND (profiles.role = 'ADMIN' OR (profiles.role = 'DELEGATE' AND profiles.classname = classname))
-  )
-);
+DROP POLICY IF EXISTS "Votes can be cast by anyone authenticated" ON public.poll_votes;
+CREATE POLICY "Votes can be cast by anyone authenticated" ON public.poll_votes FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- POLL OPTIONS
-CREATE POLICY "Poll options viewable by anyone who can see the poll" ON public.poll_options
-FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.polls WHERE id = poll_id)
-);
-
-CREATE POLICY "Admins or delegates can manage options" ON public.poll_options
-FOR ALL USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    JOIN public.polls ON polls.classname = profiles.classname
-    WHERE profiles.id = auth.uid() 
-    AND (profiles.role = 'ADMIN' OR (profiles.role = 'DELEGATE' AND polls.id = poll_id))
-  )
-);
-
--- POLL VOTES
-CREATE POLICY "Users can see their own votes" ON public.poll_votes
-FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can cast votes" ON public.poll_votes
-FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- 4. Fonction RPC pour Vote Atomique (Versionnage / Changement d'avis)
+-- 5. Fonction RPC pour Vote Atomique
 CREATE OR REPLACE FUNCTION public.cast_poll_vote(p_poll_id uuid, p_option_id uuid)
 RETURNS void AS $$
 DECLARE
   v_old_option_id uuid;
 BEGIN
-  -- Vérifier si le sondage est encore ouvert
-  IF NOT EXISTS (
-    SELECT 1 FROM public.polls 
-    WHERE id = p_poll_id 
-    AND is_active = true 
-    AND (end_time IS NULL OR end_time > now())
-  ) THEN
-    RAISE EXCEPTION 'Le scrutin est clos ou expiré.';
+  IF NOT EXISTS (SELECT 1 FROM public.polls WHERE id = p_poll_id AND is_active = true) THEN
+    RAISE EXCEPTION 'Le scrutin est clos.';
   END IF;
 
-  -- Chercher un ancien vote
-  SELECT option_id INTO v_old_option_id 
-  FROM public.poll_votes 
-  WHERE poll_id = p_poll_id AND user_id = auth.uid();
+  SELECT option_id INTO v_old_option_id FROM public.poll_votes WHERE poll_id = p_poll_id AND user_id = auth.uid();
 
   IF v_old_option_id IS NOT NULL THEN
-    -- Mettre à jour : décrémenter l'ancienne option
     UPDATE public.poll_options SET votes = votes - 1 WHERE id = v_old_option_id;
-    -- Changer le vote
     UPDATE public.poll_votes SET option_id = p_option_id WHERE poll_id = p_poll_id AND user_id = auth.uid();
   ELSE
-    -- Nouveau vote
-    INSERT INTO public.poll_votes (poll_id, option_id, user_id) 
-    VALUES (p_poll_id, p_option_id, auth.uid());
+    INSERT INTO public.poll_votes (poll_id, option_id, user_id) VALUES (p_poll_id, p_option_id, auth.uid());
   END IF;
   
-  -- Incrémenter la nouvelle option
   UPDATE public.poll_options SET votes = votes + 1 WHERE id = p_option_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
