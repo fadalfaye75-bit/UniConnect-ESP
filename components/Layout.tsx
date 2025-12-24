@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Megaphone, Calendar, GraduationCap, Video, 
   BarChart2, Search, LogOut, Menu, Moon, Sun, 
   ShieldCheck, UserCircle, Bell, Check, School, 
-  CheckCheck
+  CheckCheck, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -99,7 +99,7 @@ export default function Layout() {
     const items = [
       { to: '/', icon: LayoutDashboard, label: 'Tableau de Bord', end: true },
       { to: '/announcements', icon: Megaphone, label: 'Annonces' },
-      { to: '/schedule', icon: Calendar, label: 'Documents' },
+      { to: '/schedule', icon: Calendar, label: 'Planning & Cours' },
       { to: '/exams', icon: GraduationCap, label: 'Examens' },
       { to: '/meet', icon: Video, label: 'Directs' },
       { to: '/polls', icon: BarChart2, label: 'Consultations' },

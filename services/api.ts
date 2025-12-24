@@ -2,41 +2,26 @@
 import { supabase } from './supabaseClient';
 import { User, Announcement, Exam, MeetLink, Poll, ClassGroup, ActivityLog, AppNotification, UserRole, ScheduleFile, ScheduleSlot } from '../types';
 
-/**
- * Extrait un message d'erreur lisible d'un objet d'erreur Supabase complexe.
- */
 const getErrorMessage = (error: any): string => {
   if (!error) return "";
   if (typeof error === 'string') return error;
-  
   if (error.message && typeof error.message === 'string') return error.message;
-  if (error.error_description && typeof error.error_description === 'string') return error.error_description;
-  if (error.details && typeof error.details === 'string') return error.details;
-  
-  try {
-    return JSON.stringify(error);
-  } catch (e) {
-    return String(error);
-  }
+  return JSON.stringify(error);
 };
 
 const handleAPIError = (error: any, fallback: string) => {
   if (!error) return;
-  if (error.code === 'PGRST116') return; 
-  
   const detailedMsg = getErrorMessage(error);
   console.error(`[UniConnect API Error] ${fallback}:`, error);
-  
   let message = fallback;
   if (error.code === '23505') message = "Cette donnée existe déjà.";
-  else if (error.code === '42501') message = "Permission refusée. Vérifiez vos droits d'accès.";
+  else if (error.code === '42501') message = "Permission refusée.";
+  else if (detailedMsg.includes("Invalid login credentials")) message = "Email ou mot de passe incorrect.";
   else if (detailedMsg) message = detailedMsg;
-
   throw new Error(message);
 };
 
 const mapProfile = (dbProfile: any): User => {
-  if (!dbProfile) throw new Error("Données de profil manquantes");
   return {
     id: dbProfile.id,
     name: dbProfile.name || 'Utilisateur',
@@ -52,46 +37,59 @@ const mapProfile = (dbProfile: any): User => {
 
 export const API = {
   auth: {
+    // Helper to check if a user can create posts (Announcements, Exams, etc.)
+    canPost: (user: User | null): boolean => {
+      return user?.role === UserRole.ADMIN || user?.role === UserRole.DELEGATE;
+    },
+
+    // Helper to check if a user can edit a specific item
+    canEdit: (user: User | null, item: any): boolean => {
+      if (!user) return false;
+      if (user.role === UserRole.ADMIN) return true;
+      if (user.role === UserRole.DELEGATE && item.user_id === user.id) return true;
+      return false;
+    },
+
+    // Helper to check if a user can delete items
+    canDelete: (user: User | null): boolean => {
+      return user?.role === UserRole.ADMIN;
+    },
+
     getSession: async (): Promise<User | null> => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session?.user) return null;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return null;
         
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (profileError) return null;
-        return profile ? mapProfile(profile) : null;
+        if (error || !profile) return null;
+        return mapProfile(profile);
       } catch (e) { return null; }
     },
 
-    canEdit: (user: User | null, item: { user_id?: string, className?: string }): boolean => {
-      if (!user) return false;
-      if (user.role === UserRole.ADMIN) return true;
-      if (user.role === UserRole.DELEGATE) return item.user_id === user.id;
-      return false;
-    },
-
-    canDelete: (user: User | null): boolean => {
-      if (!user) return false;
-      return user.role === UserRole.ADMIN;
-    },
-
-    canPost: (user: User | null): boolean => {
-      if (!user) return false;
-      return user.role === UserRole.ADMIN || user.role === UserRole.DELEGATE;
-    },
-
     login: async (email: string, pass: string): Promise<User> => {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: email.trim().toLowerCase(), 
+        password: pass 
+      });
+      
       if (error) handleAPIError(error, "Identifiants invalides");
-      if (!data?.user) throw new Error("Utilisateur non trouvé.");
+      if (!data?.user) throw new Error("Connexion impossible.");
 
-      const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-      if (profileError || !profile) throw new Error("Profil introuvable.");
+      // Tentative de récupération du profil avec un léger retry si nécessaire (RLS propagation)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      if (profileError || !profile) {
+        throw new Error("Profil non trouvé. Contactez l'administrateur.");
+      }
       return mapProfile(profile);
     },
 
@@ -286,15 +284,14 @@ export const API = {
     },
     create: async (sch: any) => {
       const user = await API.auth.getSession();
-      if (!user) throw new Error("Session expirée. Veuillez vous reconnecter.");
+      if (!user) throw new Error("Session expirée.");
       const { error } = await supabase.from('schedules').insert({ 
         version: sch.version, url: sch.url, classname: sch.className, category: sch.category, user_id: user.id 
       });
-      if (error) handleAPIError(error, "Erreur lors de l'enregistrement du document.");
+      if (error) handleAPIError(error, "Erreur enregistrement document.");
     },
     delete: async (id: string) => { await supabase.from('schedules').delete().eq('id', id); },
     
-    // NOUVELLES METHODES POUR L'EMPLOI DU TEMPS INTERACTIF
     getSlots: async (className: string): Promise<ScheduleSlot[]> => {
       const { data, error } = await supabase.from('schedule_slots').select('*').eq('classname', className);
       if (error) return [];
@@ -305,14 +302,23 @@ export const API = {
     },
     saveSlots: async (className: string, slots: ScheduleSlot[]) => {
       const user = await API.auth.getSession();
-      // On vide et on remplace pour simplifier (stratégie de versionnage à implémenter si besoin de logs)
-      await supabase.from('schedule_slots').delete().eq('classname', className);
-      const { error } = await supabase.from('schedule_slots').insert(slots.map(s => ({
-        day: s.day, start_time: s.startTime, end_time: s.endTime,
-        subject: s.subject, teacher: s.teacher, room: s.room, color: s.color,
-        classname: className, user_id: user?.id
-      })));
-      if (error) handleAPIError(error, "Erreur sauvegarde emploi du temps");
+      const { error: delError } = await supabase.from('schedule_slots').delete().eq('classname', className);
+      if (delError) handleAPIError(delError, "Échec nettoyage");
+
+      const slotsToInsert = slots.map(s => ({
+        day: s.day, 
+        start_time: s.startTime, 
+        end_time: s.endTime,
+        subject: s.subject, 
+        teacher: s.teacher || '', 
+        room: s.room || '', 
+        color: s.color || '#0ea5e9',
+        classname: className, 
+        user_id: user?.id
+      }));
+
+      const { error } = await supabase.from('schedule_slots').insert(slotsToInsert);
+      if (error) handleAPIError(error, "Erreur base de données (Vérifiez les horaires ESP)");
     }
   },
 
