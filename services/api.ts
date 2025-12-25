@@ -13,12 +13,12 @@ const getErrorMessage = (error: any): string => {
 const handleAPIError = (error: any, fallback: string) => {
   if (!error) return;
   const detailedMsg = getErrorMessage(error);
-  console.error(`[UniConnect API Error] ${fallback}:`, error);
+  console.error(`[JangHup API Error] ${fallback}:`, error);
   
   let message = fallback;
   if (error.code === '23505') message = "Cette donnée existe déjà.";
-  else if (error.code === '42501') message = "Accès refusé. Vérifiez vos permissions.";
-  else if (detailedMsg.includes("New password should be different")) message = "Le nouveau mot de passe doit être différent de l'actuel.";
+  else if (error.code === '42501') message = "Accès refusé. Permissions insuffisantes.";
+  else if (detailedMsg.includes("New password should be different")) message = "Le nouveau mot de passe doit être différent.";
   else if (detailedMsg && detailedMsg !== "{}") message = `${fallback}: ${detailedMsg}`;
   
   throw new Error(message);
@@ -73,7 +73,7 @@ export const API = {
 
     createUser: async (userData: any) => {
       const { data, error } = await supabase.auth.signUp({
-        email: userData.email, 
+        email: userData.email.trim().toLowerCase(), 
         password: userData.password,
         options: { data: { name: userData.name, role: userData.role, className: userData.className, school_name: userData.schoolName } }
       });
@@ -97,12 +97,6 @@ export const API = {
     updatePassword: async (userId: string, newPass: string) => {
       const { error } = await supabase.auth.updateUser({ password: newPass });
       if (error) handleAPIError(error, "Changement de mot de passe échoué");
-    },
-
-    toggleUserStatus: async (userId: string) => {
-      const { data: p } = await supabase.from('profiles').select('is_active').eq('id', userId).maybeSingle();
-      const { error } = await supabase.from('profiles').update({ is_active: !p?.is_active }).eq('id', userId);
-      if (error) handleAPIError(error, "Action impossible sur le statut");
     },
 
     deleteUser: async (userId: string) => {
@@ -177,16 +171,16 @@ export const API = {
         };
       });
     },
+    vote: async (pollId: string, optionId: string) => {
+      const { error } = await supabase.rpc('cast_poll_vote', { p_poll_id: pollId, p_option_id: optionId });
+      if (error) handleAPIError(error, "Vote non enregistré");
+    },
     create: async (poll: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: newPoll, error } = await supabase.from('polls').insert({ question: poll.question, classname: poll.className, user_id: user?.id, end_time: poll.endTime }).select().single();
       if (error) handleAPIError(error, "Sondage non créé");
       const opts = poll.options.map((opt: any) => ({ poll_id: newPoll.id, label: opt.label }));
       await supabase.from('poll_options').insert(opts);
-    },
-    vote: async (pollId: string, optionId: string) => {
-      const { error } = await supabase.rpc('cast_poll_vote', { p_poll_id: pollId, p_option_id: optionId });
-      if (error) handleAPIError(error, "Vote non enregistré");
     },
     delete: async (id: string) => {
       const { error } = await supabase.from('polls').delete().eq('id', id);
@@ -196,7 +190,8 @@ export const API = {
       const { error } = await supabase.from('polls').update({ is_active: updates.isActive }).eq('id', id);
       if (error) handleAPIError(error, "Mise à jour statut échouée");
     },
-    subscribe: (callback: () => void) => supabase.channel('polls_db').on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, callback).subscribe()
+    // Fix: Added subscribe method to handle real-time poll updates
+    subscribe: (callback: () => void) => supabase.channel('poll_changes').on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, callback).subscribe()
   },
 
   classes: {
@@ -217,26 +212,6 @@ export const API = {
       const { error } = await supabase.from('classes').delete().eq('id', id);
       if (error) handleAPIError(error, "Suppression classe échouée");
     }
-  },
-
-  notifications: {
-    list: async (): Promise<AppNotification[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase.from('notifications').select('*').eq('target_user_id', user?.id).order('timestamp', { ascending: false });
-      if (error) return [];
-      return (data || []).map(n => ({ id: n.id, title: n.title, message: n.message, type: n.type, timestamp: n.timestamp, isRead: n.is_read }));
-    },
-    add: async (notif: any) => { await supabase.from('notifications').insert(notif); },
-    markRead: async (id: string) => { await supabase.from('notifications').update({ is_read: true }).eq('id', id); },
-    markAllRead: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('notifications').update({ is_read: true }).eq('target_user_id', user?.id);
-    },
-    clear: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('notifications').delete().eq('target_user_id', user?.id);
-    },
-    subscribe: (userId: string, callback: (p: any) => void) => supabase.channel(`notif-${userId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, callback).subscribe()
   },
 
   schedules: {
@@ -302,12 +277,7 @@ export const API = {
 
   interactions: {
     incrementShare: async (table: string, id: string) => { 
-      try { 
-        // Appel silencieux : On ne veut pas que l'UI plante si le compteur ne s'incrémente pas
-        await supabase.rpc('increment_share_count', { target_table: table, target_id: id }); 
-      } catch (e) {
-        console.warn("Share increment failed, ignoring.");
-      }
+      try { await supabase.rpc('increment_share_count', { target_table: table, target_id: id }); } catch (e) {}
     }
   },
 
@@ -317,12 +287,32 @@ export const API = {
       return data || [];
     }
   },
+
+  notifications: {
+    list: async (): Promise<AppNotification[]> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from('notifications').select('*').eq('target_user_id', user?.id).order('timestamp', { ascending: false });
+      if (error) return [];
+      return (data || []).map(n => ({ id: n.id, title: n.title, message: n.message, type: n.type, timestamp: n.timestamp, isRead: n.is_read }));
+    },
+    add: async (notif: any) => { await supabase.from('notifications').insert(notif); },
+    markRead: async (id: string) => { await supabase.from('notifications').update({ is_read: true }).eq('id', id); },
+    markAllRead: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('notifications').update({ is_read: true }).eq('target_user_id', user?.id);
+    },
+    clear: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('notifications').delete().eq('target_user_id', user?.id);
+    }
+  },
+
   settings: {
     getAI: async () => {
       try {
         const { data } = await supabase.from('ai_settings').select('*').maybeSingle();
-        return { isActive: data?.is_active ?? true, verbosity: data?.verbosity ?? 'medium', tone: data?.tone ?? 'balanced', customInstructions: data?.custom_instructions ?? "Assistant UniConnect." };
-      } catch (e) { return { isActive: true, verbosity: 'medium', tone: 'balanced', customInstructions: "Assistant UniConnect." }; }
+        return { isActive: data?.is_active ?? true, verbosity: data?.verbosity ?? 'medium', tone: data?.tone ?? 'balanced', customInstructions: data?.custom_instructions ?? "Assistant JangHup." };
+      } catch (e) { return { isActive: true, verbosity: 'medium', tone: 'balanced', customInstructions: "Assistant JangHup." }; }
     }
   }
 };

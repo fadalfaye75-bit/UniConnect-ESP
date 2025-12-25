@@ -1,5 +1,5 @@
 {
   "name": "JangHup",
-  "description": "Plateforme de gestion universitaire centralisée, connectant l'administration, les délégués et les étudiants de l'ESP Dakar.",
+  "description": "Plateforme centralisée de gestion universitaire de l'ESP Dakar. Connecte l'administration, les délégués et les étudiants dans un écosystème numérique unifié.",
   "requestFramePermissions": []
 }

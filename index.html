@@ -3,9 +3,12 @@
 <html lang="fr" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JangHup - Portail Étudiant Officiel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>JangHup - Portail Universitaire Officiel</title>
     <meta name="description" content="Plateforme de gestion centralisée pour l'administration, les délégués et les étudiants de l'ESP Dakar.">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,6 +31,17 @@
             boxShadow: {
               'soft': '0 20px 40px -15px rgba(0, 0, 0, 0.05)',
               'premium': '0 30px 60px -15px rgba(0, 0, 0, 0.15)',
+              'inner-soft': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)',
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'shimmer': 'shimmer 2s infinite linear',
+            },
+            keyframes: {
+              shimmer: {
+                '0%': { backgroundPosition: '-200% 0' },
+                '100%': { backgroundPosition: '200% 0' },
+              }
             }
           }
         }
@@ -54,8 +68,8 @@
 }
 </script>
     <style>
-      * { transition: background-color 0.3s ease, border-color 0.3s ease; }
-      body { background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
+      * { transition: background-color 0.2s ease, border-color 0.2s ease; outline: none !important; -webkit-tap-highlight-color: transparent; }
+      body { background-color: #f8fafc; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
       .dark body { background-color: #020617; }
       
       #app-loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff; z-index: 9999; }
@@ -63,13 +77,24 @@
       .spinner { width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #0ea5e9; border-radius: 50%; animation: spin 0.8s linear infinite; }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-      .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+      .dark .skeleton { background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; }
+      @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-      ::-webkit-scrollbar { width: 6px; }
+      .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+      ::-webkit-scrollbar { width: 5px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .dark ::-webkit-scrollbar-thumb { background: #334155; }
+      
+      .stagger-item { opacity: 0; animation: staggerFadeIn 0.5s ease-out forwards; }
+      @keyframes staggerFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .stagger-1 { animation-delay: 0.1s; }
+      .stagger-2 { animation-delay: 0.2s; }
+      .stagger-3 { animation-delay: 0.3s; }
+      .stagger-4 { animation-delay: 0.4s; }
     </style>
   </head>
   <body>
