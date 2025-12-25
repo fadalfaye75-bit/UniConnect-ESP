@@ -77,9 +77,12 @@ export default function Exams() {
   const handleCopy = (exam: Exam) => {
     const d = new Date(exam.date);
     const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    const text = `📝 *UniConnect ESP*\n🎓 Matière: ${exam.subject}\n📅 Date: ${dateStr}\n⏰ Heure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Salle: ${exam.room}\n⏱️ Durée: ${exam.duration}`;
+    const className = exam.className || 'Filière';
+    
+    const text = `🔵 JangHup – ${className}\n\n📌 AVIS D'EXAMEN : ${exam.subject.toUpperCase()}\n\n📅 Date : ${dateStr}\n⏰ Heure : ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Salle : ${exam.room}\n⏱️ Durée : ${exam.duration}\n\n🔗 Consulter sur JangHup : https://janghup.app/#/exams\n\n—\nPlateforme JangHup`;
+    
     navigator.clipboard.writeText(text).then(() => {
-      addNotification({ title: 'Copié', message: 'Détails de l\'épreuve prêts.', type: 'success' });
+      addNotification({ title: 'Copié', message: 'Format institutionnel prêt.', type: 'success' });
     });
   };
 
@@ -87,7 +90,10 @@ export default function Exams() {
     try {
       const d = new Date(exam.date);
       const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-      const text = `📝 *UniConnect ESP*\n🎓 Matière: *${exam.subject}*\n📅 Date: ${dateStr}\n⏰ Heure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Salle: ${exam.room}\n⏱️ Durée: ${exam.duration}\n\n#UniConnect #ESP`;
+      const className = exam.className || 'Filière';
+      
+      const text = `🔵 *JangHup – ${className}*\n\n*📌 AVIS D'EXAMEN : ${exam.subject.toUpperCase()}*\n\n📅 *Date :* ${dateStr}\n⏰ *Heure :* ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 *Lieu :* Salle ${exam.room}\n⏱️ *Durée :* ${exam.duration}\n\n🔗 *Consulter sur JangHup*\nhttps://janghup.app/#/exams\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
+      
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       API.interactions.incrementShare('exams', exam.id).catch(() => {});
     } catch (e) {
@@ -99,11 +105,13 @@ export default function Exams() {
     try {
       const targetClass = classes.find(c => c.name === exam.className);
       const recipient = targetClass?.email || '';
+      const className = exam.className || 'Filière';
 
       const d = new Date(exam.date);
       const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-      const subject = `[UniConnect ESP] Examen: ${exam.subject}`;
-      const body = `Détails de l'épreuve :\n\nMatière: ${exam.subject}\nDate: ${dateStr}\nHeure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\nSalle: ${exam.room}\nDurée: ${exam.duration}\n\nNotes: ${exam.notes || 'Aucune'}`;
+      const subject = `[JangHup – ${className}] Avis d'Examen : ${exam.subject}`;
+      
+      const body = `🔵 JangHup – ${className}\n\n📌 AVIS D'EXAMEN : ${exam.subject.toUpperCase()}\n\n📅 Date : ${dateStr}\n⏰ Heure : ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Lieu : Salle ${exam.room}\n⏱️ Durée : ${exam.duration}\n\n📝 Notes : ${exam.notes || 'N/A'}\n\n🔗 Consulter sur JangHup : https://janghup.app/#/exams\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
       
       window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       API.interactions.incrementShare('exams', exam.id).catch(() => {});
@@ -197,7 +205,7 @@ export default function Exams() {
            </div>
            <div>
               <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase">Calendrier Examens</h2>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-3">Portail Académique • {user?.schoolName}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-3">Portail Académique • JangHup</p>
            </div>
         </div>
         
@@ -235,7 +243,6 @@ export default function Exams() {
           const examDate = new Date(exam.date);
           const isPassed = examDate < new Date();
           
-          // Droits d'édition et suppression synchronisés RLS
           const canEdit = API.auth.canEdit(user, exam);
           const canDelete = API.auth.canDelete(user);
           

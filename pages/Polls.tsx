@@ -65,15 +65,19 @@ export default function Polls() {
 
   const handleShareWhatsApp = (poll: Poll) => {
     try {
+      const className = poll.className || 'Filière';
       const maxVotes = Math.max(...poll.options.map(o => o.votes));
       const leader = poll.options.find(o => o.votes === maxVotes);
+      
       let optionsText = poll.options
         .map(o => {
           const p = poll.totalVotes > 0 ? Math.round((o.votes / poll.totalVotes) * 100) : 0;
-          return `${o.label}: ${p}%`;
+          return `🔹 ${o.label} : ${p}%`;
         })
         .join('\n');
-      const text = `📊 *UniConnect ESP - Consultation*\n\n*Question :* ${poll.question}\n\n${optionsText}\n\n👥 *Total :* ${poll.totalVotes} participations\n🏆 *Tendance :* ${leader?.label || 'N/A'}\n\n#UniConnect #ESP`;
+
+      const text = `🔵 *JangHup – ${className}*\n\n*📊 CONSULTATION : ${poll.question.toUpperCase()}*\n\n${optionsText}\n\n👥 *Total de participations :* ${poll.totalVotes}\n🏆 *Tendance actuelle :* ${leader?.label || 'En attente'}\n\n🗳️ *Voter sur JangHup :*\nhttps://janghup.app/#/polls\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
+      
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       API.interactions.incrementShare('polls', poll.id).catch(() => {});
     } catch (e) {
@@ -193,7 +197,7 @@ export default function Polls() {
            <div>
               <h2 className="text-3xl sm:text-5xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase leading-none">Consultations</h2>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mt-4 flex items-center gap-2">
-                <Shield size={12} className="text-primary-500" /> Scrutins & Démocratie ESP
+                <Shield size={12} className="text-primary-500" /> Scrutins & Démocratie JangHup
               </p>
            </div>
         </div>
@@ -337,7 +341,7 @@ export default function Polls() {
                   </div>
 
                   <div className="lg:col-span-2 h-full flex flex-col min-h-[400px]">
-                     <div className="bg-gray-50/50 dark:bg-gray-800/30 rounded-[3.5rem] p-10 border border-gray-100 dark:border-gray-800 flex flex-col h-full">
+                     <div className="bg-gray-50/50 dark:bg-gray-800/30 rounded-[3.5rem] p-10 border border-gray-100 dark:border-gray-700 flex flex-col h-full">
                         {showResults ? (
                           <div className="h-full flex flex-col">
                             <div className="flex items-center justify-between mb-8">
@@ -373,7 +377,6 @@ export default function Polls() {
                             
                             <div className="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-gray-400">
                                <p className="text-[9px] font-black uppercase tracking-widest italic flex items-center gap-2">
-                                  {/* Added Activity icon import to the component to resolve error */}
                                   <Activity size={12} className="text-primary-500" /> Analyse live
                                </p>
                                <span className="text-[9px] font-bold">{poll.isActive ? 'MAJ en continu' : 'Scrutin clos'}</span>
@@ -438,8 +441,8 @@ export default function Polls() {
            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Cible</label>
-                <select disabled={!isAdmin} value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-black text-[10px] uppercase outline-none cursor-pointer">
-                   <option value="Général">Toute l'ESP</option>
+                <select disabled={!isAdmin} value={newPoll.className} onChange={e => setNewPoll({...newPoll, className: e.target.value})} className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-800 font-black text-[10px] uppercase outline-none border-none cursor-pointer">
+                   <option value="Général">Toute l'école</option>
                    {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               </div>

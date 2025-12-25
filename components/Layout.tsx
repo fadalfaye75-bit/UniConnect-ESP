@@ -110,7 +110,7 @@ export default function Layout() {
   }, [user?.role]);
 
   const handleLogout = useCallback(async () => {
-    if (window.confirm("Voulez-vous vraiment quitter le portail UniConnect ESP ?")) {
+    if (window.confirm("Voulez-vous vraiment quitter le portail JangHup ?")) {
       await logout();
     }
   }, [logout]);
@@ -127,7 +127,7 @@ export default function Layout() {
              <School size={28} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tighter uppercase italic leading-none">UniConnect</h1>
+            <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tighter uppercase italic leading-none">JangHup</h1>
             <p className="text-[8px] font-black uppercase tracking-[0.2em] mt-1 opacity-70" style={{ color: themeColor }}>{user?.schoolName || 'ESP DAKAR'}</p>
           </div>
         </div>

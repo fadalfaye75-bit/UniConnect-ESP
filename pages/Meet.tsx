@@ -71,7 +71,10 @@ export default function Meet() {
 
   const handleShareWhatsApp = (link: MeetLink) => {
     try {
-      const text = `🎥 *UniConnect ESP - Direct*\n\nModule: *${link.title}*\nPlateforme: ${link.platform}\nHoraire: ${link.time}\n\nLien: ${link.url}\n\n#UniConnect #ESP`;
+      const className = link.className || 'Filière';
+      
+      const text = `🔵 *JangHup – ${className}*\n\n*📽️ SESSION EN DIRECT : ${link.title.toUpperCase()}*\n\n📅 *Horaire :* ${link.time}\n🧩 *Plateforme :* ${link.platform}\n\n🔗 *Lien de connexion :*\n${link.url}\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
+      
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       API.interactions.incrementShare('meet_links', link.id).catch(() => {});
     } catch (e) {
@@ -83,9 +86,10 @@ export default function Meet() {
     try {
       const targetClass = classes.find(c => c.name === link.className);
       const recipient = targetClass?.email || '';
+      const className = link.className || 'Filière';
 
-      const subject = `[UniConnect ESP] Session Direct: ${link.title}`;
-      const body = `Bonjour,\n\nUne session de cours en direct est programmée :\n\nModule: ${link.title}\nPlateforme: ${link.platform}\nHoraire: ${link.time}\n\nLien de connexion: ${link.url}\n\nÀ bientôt sur UniConnect !`;
+      const subject = `[JangHup – ${className}] Session Direct : ${link.title}`;
+      const body = `🔵 JangHup – ${className}\n\n📽️ SESSION EN DIRECT : ${link.title.toUpperCase()}\n\n📅 Horaire : ${link.time}\n🧩 Plateforme : ${link.platform}\n\n🔗 Lien de connexion : ${link.url}\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
       
       window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       API.interactions.incrementShare('meet_links', link.id).catch(() => {});
@@ -165,7 +169,7 @@ export default function Meet() {
            </div>
            <div>
               <h2 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic uppercase">Salons Virtuels</h2>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-3">Directs & Visioconférences • {user?.className || 'ESP'}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-3">Directs & Visioconférences • JangHup</p>
            </div>
         </div>
         

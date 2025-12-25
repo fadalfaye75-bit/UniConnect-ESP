@@ -81,10 +81,12 @@ export default function Announcements() {
 
   const handleShareWhatsApp = (ann: Announcement) => {
     try {
-      const priorityEmoji = ann.priority === 'urgent' ? '🚨' : ann.priority === 'important' ? '⚠️' : 'ℹ️';
-      const text = `${priorityEmoji} *UniConnect ESP*\n\n*${ann.title.toUpperCase()}*\n\n${ann.content}\n\n#UniConnect #ESP`;
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, '_blank');
+      const className = ann.className || 'Toutes Filières';
+      const priorityLabel = ann.priority === 'urgent' ? '🔴 URGENT' : ann.priority === 'important' ? '🟠 IMPORTANT' : '📌 ANNONCE';
+      
+      const text = `🔵 *JangHup – ${className}*\n\n*${priorityLabel} : ${ann.title.toUpperCase()}*\n\n${ann.content}\n\n📅 *Publié le :* ${new Date(ann.date).toLocaleDateString()}\n👤 *Par :* ${ann.author}\n\n🔗 *Consulter sur JangHup*\nhttps://janghup.app/#/announcements\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
+      
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       API.interactions.incrementShare('announcements', ann.id).catch(() => {});
     } catch (e) {
       console.error("WhatsApp share failed", e);
@@ -93,15 +95,14 @@ export default function Announcements() {
 
   const handleShareEmail = (ann: Announcement) => {
     try {
-      // Trouver l'email de la classe concernée
       const targetClass = classes.find(c => c.name === ann.className);
       const recipient = targetClass?.email || '';
+      const className = ann.className || 'Toutes Filières';
       
-      const subject = `[UniConnect ESP] ${ann.title}`;
-      const body = `${ann.content}\n\n---\nPosté par: ${ann.author}\nDate: ${new Date(ann.date).toLocaleDateString()}\n#UniConnect #ESP`;
-      const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const subject = `[JangHup – ${className}] ${ann.title}`;
+      const body = `🔵 JangHup – ${className}\n\n📌 ANNONCE : ${ann.title.toUpperCase()}\n\n${ann.content}\n\n---\nPublié le : ${new Date(ann.date).toLocaleDateString()}\nPar : ${ann.author}\n\n🔗 Consulter sur JangHup : https://janghup.app/#/announcements\n\n—\nPlateforme JangHup\nCommunication académique officielle`;
       
-      window.location.href = mailtoUrl;
+      window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       API.interactions.incrementShare('announcements', ann.id).catch(() => {});
     } catch (e) {
       console.error("Email share failed", e);
@@ -172,7 +173,7 @@ export default function Announcements() {
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <Loader2 className="animate-spin text-primary-500" size={40} />
-      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Flux UniConnect...</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Flux JangHup...</p>
     </div>
   );
 
@@ -183,7 +184,7 @@ export default function Announcements() {
            <div className="w-16 h-16 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl" style={{ backgroundColor: themeColor }}><Megaphone size={32} /></div>
            <div>
               <h2 className="text-4xl font-black text-gray-900 dark:text-white uppercase italic leading-none">Annonces</h2>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">Dernières infos de l'ESP Dakar</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">Dernières infos de JangHup</p>
            </div>
         </div>
         {canPost && (
@@ -206,7 +207,10 @@ export default function Announcements() {
           const annColor = ann.color || themeColor;
 
           return (
-            <div key={ann.id} className={`group bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.01] hover:shadow-premium transition-all duration-500 flex flex-col md:flex-row gap-10 overflow-hidden relative cursor-default ${isProcessing ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+            <div 
+              key={ann.id} 
+              className={`group bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.015] hover:-translate-y-1.5 hover:shadow-premium transition-all duration-300 flex flex-col md:flex-row gap-10 overflow-hidden relative cursor-default ${isProcessing ? 'opacity-50 pointer-events-none grayscale' : ''}`}
+            >
               <div className="absolute top-0 left-0 w-2 h-full transition-all duration-500 group-hover:w-3" style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : (ann.priority === 'important' ? '#f59e0b' : annColor) }} />
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-4">
@@ -245,7 +249,7 @@ export default function Announcements() {
               </select>
               {user?.role === UserRole.ADMIN && (
                 <select value={newAnn.className} onChange={e => setNewAnn({...newAnn, className: e.target.value})} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-black text-[10px] uppercase outline-none">
-                  <option value="Général">Toute l'ESP</option>
+                  <option value="Général">Toute l'école</option>
                   {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               )}

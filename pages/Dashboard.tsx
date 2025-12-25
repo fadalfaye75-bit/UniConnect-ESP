@@ -132,7 +132,7 @@ export default function Dashboard() {
           
           <div className="space-y-8">
               {data.anns.length > 0 ? data.anns.map((ann, i) => (
-                    <div key={ann.id} className={`stagger-item stagger-${(i%4)+1} group bg-white dark:bg-gray-900 p-10 rounded-[3.5rem] shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:shadow-premium transition-all duration-500 cursor-pointer relative overflow-hidden`} onClick={() => navigate('/announcements')}>
+                    <div key={ann.id} className={`stagger-item stagger-${(i%4)+1} group bg-white dark:bg-gray-900 p-10 rounded-[3.5rem] shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.015] hover:-translate-y-1 hover:shadow-premium transition-all duration-300 cursor-pointer relative overflow-hidden`} onClick={() => navigate('/announcements')}>
                       <div className="w-2 h-full absolute left-0 top-0 transition-all group-hover:w-3" style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : (ann.priority === 'important' ? '#f59e0b' : themeColor) }} />
                       <div className="flex-1">
                         <div className="flex items-center gap-4 mb-6">
