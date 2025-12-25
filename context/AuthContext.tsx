@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
 import { API } from '../services/api';
@@ -33,10 +34,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const initAuth = async () => {
       try {
-        const sessionUser = await API.auth.getSession();
-        setUser(sessionUser);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const profile = await API.auth.getSession();
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
       } catch (e) {
         console.error("Auth initialization failed", e);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -44,15 +51,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     initAuth();
 
-    // Listen for auth changes (native Supabase session management)
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Fix: Removed 'USER_DELETED' as it's not a valid type in the current Supabase AuthChangeEvent union
       if (event === 'SIGNED_OUT') {
         setUser(null);
         setAdminViewClass(null);
-      } else if (session?.user) {
-        const profile = await API.auth.getSession();
-        setUser(profile);
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          const profile = await API.auth.getSession();
+          setUser(profile);
+        }
       }
     });
 
@@ -66,27 +74,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      // 1. Déconnexion côté serveur via Supabase
+      // 1. Sign out from Supabase (Server side)
       await supabase.auth.signOut();
       
-      // 2. Réinitialisation de l'état local
+      // 2. Local State Reset
       setUser(null);
       setAdminViewClass(null);
       
-      // 3. Nettoyage manuel du stockage local pour forcer une déconnexion complète
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.includes('supabase.auth.token') || key.includes('-auth-token')) {
-          localStorage.removeItem(key);
+      // 3. Complete Storage Wipe
+      // Nettoyage de tous les tokens possibles de Supabase
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('sb-'))) {
+          keysToRemove.push(key);
         }
-      });
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
       
-      // Petit hack pour s'assurer que l'app est clean
-      window.location.href = '#/login';
+      // 4. Final redirect and FORCE RELOAD to clear any remaining in-memory state
+      window.location.hash = '#/login';
+      window.location.reload(); 
     } catch (e) {
-      console.warn("Logout process had issues, force clearing state.", e);
-      setUser(null);
-      window.location.href = '#/login';
+      console.warn("Forced cleanup due to signout error:", e);
+      localStorage.clear();
+      window.location.hash = '#/login';
+      window.location.reload();
     }
   };
 
@@ -109,7 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return (
           <div id="app-loader">
               <div className="spinner"></div>
-              <p className="mt-4 text-sm font-black text-gray-500 uppercase tracking-widest italic animate-pulse">Session UniConnect...</p>
+              <p className="mt-4 text-sm font-black text-gray-500 uppercase tracking-widest italic animate-pulse">Synchronisation UniConnect...</p>
           </div>
       );
   }

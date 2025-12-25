@@ -1,10 +1,58 @@
 
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { NotificationProvider } from './context/NotificationContext.tsx';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { UserRole } from './types.ts';
+
+// Error Boundary Component
+// Fix: Use React.Component explicitly with generic types to ensure 'state' and 'props' are correctly identified by the compiler
+class ErrorBoundary extends React.Component<{children: ReactNode}, {hasError: boolean, error: Error | null}> {
+  constructor(props: {children: ReactNode}) {
+    super(props);
+    // Fix: Explicitly initializing state in the constructor
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    // Fix: Accessing this.state which is now correctly typed from React.Component
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 p-6 text-center">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-xl">
+            <AlertTriangle size={40} />
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase italic mb-4">Erreur Inattendue</h1>
+          <p className="text-gray-500 max-w-md mb-8 italic text-sm">
+            Une erreur critique est survenue dans l'application. Ne vous inquiétez pas, vos données sont en sécurité.
+          </p>
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-red-100 mb-8 text-left w-full max-w-lg">
+             <p className="text-[10px] font-black uppercase text-red-400 mb-1">Détails techniques :</p>
+             {/* Fix: Safely accessing error from state */}
+             <code className="text-[11px] text-gray-400 block break-words">{this.state.error?.message}</code>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-10 py-4 bg-gray-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-3 shadow-xl hover:bg-black transition-all"
+          >
+            <RefreshCcw size={16} /> Recharger la plateforme
+          </button>
+        </div>
+      );
+    }
+    // Fix: Accessing this.props which is now correctly typed from React.Component
+    return this.props.children;
+  }
+}
 
 // Lazy loaded pages
 const Layout = lazy(() => import('./components/Layout.tsx'));
@@ -18,7 +66,6 @@ const Polls = lazy(() => import('./pages/Polls.tsx'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel.tsx'));
 const Profile = lazy(() => import('./pages/Profile.tsx'));
 
-// Utility to scroll to top on route change
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -30,7 +77,7 @@ const ScrollToTop = () => {
 const LoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[400px] w-full bg-gray-50/50 dark:bg-gray-900/50">
     <Loader2 className="animate-spin text-primary-500 mb-4" size={40} />
-    <p className="text-sm font-bold text-gray-500 animate-pulse">Chargement de UniConnect...</p>
+    <p className="text-sm font-bold text-gray-500 animate-pulse uppercase tracking-widest italic">Chargement UniConnect...</p>
   </div>
 );
 
@@ -82,12 +129,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <NotificationProvider>
+          <HashRouter>
+            <AppRoutes />
+          </HashRouter>
+        </NotificationProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

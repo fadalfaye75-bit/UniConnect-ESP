@@ -3,9 +3,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../services/api';
 import { 
-  Clock, MapPin, AlertTriangle, Plus, Trash2, Loader2, Copy, Share2, Pencil, Search, Filter, Sparkles, Calendar as CalendarIcon, ArrowRight, ChevronDown, CheckCircle2, Bookmark, Save
+  Clock, MapPin, AlertTriangle, Plus, Trash2, Loader2, Copy, Share2, Pencil, Search, Filter, Sparkles, Calendar as CalendarIcon, ArrowRight, ChevronDown, CheckCircle2, Bookmark, Save, MessageCircle, Mail
 } from 'lucide-react';
-import { UserRole, Exam } from '../types';
+import { UserRole, Exam, ClassGroup } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
 
@@ -13,7 +13,7 @@ export default function Exams() {
   const { user, adminViewClass } = useAuth();
   const { addNotification } = useNotification();
   const [exams, setExams] = useState<Exam[]>([]);
-  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
+  const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -81,6 +81,35 @@ export default function Exams() {
     navigator.clipboard.writeText(text).then(() => {
       addNotification({ title: 'Copié', message: 'Détails de l\'épreuve prêts.', type: 'success' });
     });
+  };
+
+  const handleShareWhatsApp = (exam: Exam) => {
+    try {
+      const d = new Date(exam.date);
+      const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      const text = `📝 *UniConnect ESP*\n🎓 Matière: *${exam.subject}*\n📅 Date: ${dateStr}\n⏰ Heure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\n📍 Salle: ${exam.room}\n⏱️ Durée: ${exam.duration}\n\n#UniConnect #ESP`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      API.interactions.incrementShare('exams', exam.id).catch(() => {});
+    } catch (e) {
+      console.error("WhatsApp share failed", e);
+    }
+  };
+
+  const handleShareEmail = (exam: Exam) => {
+    try {
+      const targetClass = classes.find(c => c.name === exam.className);
+      const recipient = targetClass?.email || '';
+
+      const d = new Date(exam.date);
+      const dateStr = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+      const subject = `[UniConnect ESP] Examen: ${exam.subject}`;
+      const body = `Détails de l'épreuve :\n\nMatière: ${exam.subject}\nDate: ${dateStr}\nHeure: ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}\nSalle: ${exam.room}\nDurée: ${exam.duration}\n\nNotes: ${exam.notes || 'Aucune'}`;
+      
+      window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      API.interactions.incrementShare('exams', exam.id).catch(() => {});
+    } catch (e) {
+      console.error("Email share failed", e);
+    }
   };
 
   const openNewModal = () => {
@@ -257,8 +286,9 @@ export default function Exams() {
               </div>
 
               <div className="flex md:flex-col items-center justify-center gap-2 p-6 md:p-0 md:pl-10 border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-800">
-                 <button onClick={() => handleCopy(exam)} className="p-3.5 bg-gray-900 text-white rounded-2xl hover:scale-110 transition-all shadow-lg active:scale-90" title="Copier les détails"><Copy size={20}/></button>
-                 <button onClick={() => { if(navigator.share) navigator.share({title: exam.subject, text: `${exam.subject} - ${examDate.toLocaleString()} - Salle ${exam.room}`}); }} className="p-3.5 bg-orange-50 text-orange-500 rounded-2xl hover:bg-orange-500 hover:text-white transition-all active:scale-90" title="Partager"><Share2 size={20}/></button>
+                 <button onClick={() => handleShareWhatsApp(exam)} className="p-3.5 bg-[#25D366] text-white rounded-2xl hover:scale-110 transition-all shadow-lg active:scale-90" title="WhatsApp"><MessageCircle size={20}/></button>
+                 <button onClick={() => handleShareEmail(exam)} className="p-3.5 bg-gray-900 text-white rounded-2xl hover:scale-110 transition-all shadow-lg active:scale-90" title="Email"><Mail size={20}/></button>
+                 <button onClick={() => handleCopy(exam)} className="p-3.5 bg-gray-100 text-gray-600 rounded-2xl hover:scale-110 transition-all shadow-sm active:scale-90" title="Copier"><Copy size={20}/></button>
                  {canEdit && <button onClick={() => handleEdit(exam)} className="p-3.5 bg-blue-50 text-blue-500 rounded-2xl hover:bg-blue-500 hover:text-white transition-all active:scale-90" title="Éditer"><Pencil size={20}/></button>}
                  {canDelete && <button onClick={() => handleDelete(exam.id)} className="p-3.5 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-90" title="Supprimer"><Trash2 size={20}/></button>}
               </div>

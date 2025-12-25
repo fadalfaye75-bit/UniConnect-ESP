@@ -5,9 +5,9 @@ import { API } from '../services/api';
 import { 
   Plus, Share2, Trash2, Loader2, Pencil, 
   Megaphone, Search, Bookmark, Maximize2,
-  ExternalLink, Trash, Link2, X
+  ExternalLink, Trash, Link2, X, MessageCircle, Mail
 } from 'lucide-react';
-import { UserRole, Announcement, AnnouncementPriority, ExternalLink as ExtLinkType } from '../types';
+import { UserRole, Announcement, AnnouncementPriority, ExternalLink as ExtLinkType, ClassGroup } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
 
@@ -36,7 +36,7 @@ export default function Announcements() {
   const themeColor = user?.themeColor || '#0ea5e9';
   
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
+  const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
@@ -54,7 +54,6 @@ export default function Announcements() {
     links: [] as ExtLinkType[]
   });
 
-  const [tempLink, setTempLink] = useState({ label: '', url: '' });
   const [searchTerm, setSearchTerm] = useState('');
 
   const canPost = API.auth.canPost(user);
@@ -75,25 +74,37 @@ export default function Announcements() {
 
   useEffect(() => {
     fetchAnnouncements(true);
-    API.classes.list().then(setClasses);
+    API.classes.list().then(setClasses).catch(() => {});
     const subscription = API.announcements.subscribe(() => fetchAnnouncements(false));
     return () => { subscription.unsubscribe(); };
   }, [fetchAnnouncements]);
 
-  const handleShare = async (ann: Announcement) => {
-    if (processingIds.has(ann.id)) return;
-    setProcessingIds(prev => new Set(prev).add(ann.id));
+  const handleShareWhatsApp = (ann: Announcement) => {
     try {
       const priorityEmoji = ann.priority === 'urgent' ? '🚨' : ann.priority === 'important' ? '⚠️' : 'ℹ️';
-      let shareText = `${priorityEmoji} *UniConnect ESP*\n\n*${ann.title.toUpperCase()}*\n\n${ann.content}\n\n#UniConnect #ESP`;
-      if (navigator.share) await navigator.share({ title: ann.title, text: shareText });
-      else {
-        await navigator.clipboard.writeText(shareText);
-        addNotification({ title: 'Copié', message: 'Prêt pour partage.', type: 'success' });
-      }
-      await API.interactions.incrementShare('announcements', ann.id);
-    } catch (err) {} finally {
-      setProcessingIds(prev => { const next = new Set(prev); next.delete(ann.id); return next; });
+      const text = `${priorityEmoji} *UniConnect ESP*\n\n*${ann.title.toUpperCase()}*\n\n${ann.content}\n\n#UniConnect #ESP`;
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+      API.interactions.incrementShare('announcements', ann.id).catch(() => {});
+    } catch (e) {
+      console.error("WhatsApp share failed", e);
+    }
+  };
+
+  const handleShareEmail = (ann: Announcement) => {
+    try {
+      // Trouver l'email de la classe concernée
+      const targetClass = classes.find(c => c.name === ann.className);
+      const recipient = targetClass?.email || '';
+      
+      const subject = `[UniConnect ESP] ${ann.title}`;
+      const body = `${ann.content}\n\n---\nPosté par: ${ann.author}\nDate: ${new Date(ann.date).toLocaleDateString()}\n#UniConnect #ESP`;
+      const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      
+      window.location.href = mailtoUrl;
+      API.interactions.incrementShare('announcements', ann.id).catch(() => {});
+    } catch (e) {
+      console.error("Email share failed", e);
     }
   };
 
@@ -110,12 +121,17 @@ export default function Announcements() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Supprimer cette annonce définitivement ?")) return;
+    if (!window.confirm("Supprimer définitivement ?")) return;
+    setProcessingIds(prev => new Set(prev).add(id));
     try {
       await API.announcements.delete(id);
-      fetchAnnouncements(false);
-      addNotification({ title: 'Supprimé', message: 'L\'annonce a été retirée.', type: 'info' });
-    } catch (e) { addNotification({ title: 'Erreur', message: 'Suppression impossible.', type: 'alert' }); }
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      addNotification({ title: 'Supprimé', message: 'Contenu retiré.', type: 'info' });
+    } catch (e: any) { 
+      addNotification({ title: 'Échec', message: e.message, type: 'alert' }); 
+    } finally {
+      setProcessingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    }
   };
 
   const handleEdit = (ann: Announcement) => {
@@ -153,7 +169,12 @@ export default function Announcements() {
     });
   }, [announcements, searchTerm, user]);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary-500" size={40} /></div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <Loader2 className="animate-spin text-primary-500" size={40} />
+      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Flux UniConnect...</p>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-32 animate-fade-in">
@@ -161,12 +182,12 @@ export default function Announcements() {
         <div className="flex items-center gap-5">
            <div className="w-16 h-16 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl" style={{ backgroundColor: themeColor }}><Megaphone size={32} /></div>
            <div>
-              <h2 className="text-4xl font-black text-gray-900 dark:text-white uppercase italic">Annonces</h2>
+              <h2 className="text-4xl font-black text-gray-900 dark:text-white uppercase italic leading-none">Annonces</h2>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">Dernières infos de l'ESP Dakar</p>
            </div>
         </div>
         {canPost && (
-          <button onClick={() => { setEditingId(null); setNewAnn({ title: '', content: '', priority: 'normal', className: '', links: [] }); setIsModalOpen(true); }} className="bg-primary-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl hover:brightness-110 transition-all">
+          <button onClick={() => { setEditingId(null); setNewAnn({ title: '', content: '', priority: 'normal', className: '', links: [] }); setIsModalOpen(true); }} className="bg-primary-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl hover:brightness-110 transition-all active:scale-95">
             <Plus size={20} /> Nouvelle Publication
           </button>
         )}
@@ -180,11 +201,12 @@ export default function Announcements() {
       <div className="grid gap-8">
         {displayedAnnouncements.map((ann) => {
           const canEdit = API.auth.canEdit(user, ann);
-          const canDelete = API.auth.canDelete(user);
+          const canDelete = API.auth.canDelete(user) || (user?.role === UserRole.DELEGATE && ann.user_id === user?.id);
+          const isProcessing = processingIds.has(ann.id);
           const annColor = ann.color || themeColor;
 
           return (
-            <div key={ann.id} className="group bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.02] hover:shadow-premium transition-all duration-500 flex flex-col md:flex-row gap-10 overflow-hidden relative cursor-default">
+            <div key={ann.id} className={`group bg-white dark:bg-gray-900 rounded-[3.5rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 dark:hover:border-gray-800 hover:scale-[1.01] hover:shadow-premium transition-all duration-500 flex flex-col md:flex-row gap-10 overflow-hidden relative cursor-default ${isProcessing ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
               <div className="absolute top-0 left-0 w-2 h-full transition-all duration-500 group-hover:w-3" style={{ backgroundColor: ann.priority === 'urgent' ? '#f43f5e' : (ann.priority === 'important' ? '#f59e0b' : annColor) }} />
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-4">
@@ -199,10 +221,15 @@ export default function Announcements() {
                 </div>
               </div>
               <div className="flex md:flex-col items-center justify-center gap-2 md:pl-10 md:border-l border-gray-100 dark:border-gray-800 opacity-80 group-hover:opacity-100 transition-opacity">
-                 <button onClick={() => handleShare(ann)} className="p-3 bg-gray-900 text-white rounded-xl active:scale-90 hover:scale-110 transition-all shadow-md"><Share2 size={18}/></button>
+                 <button onClick={() => handleShareWhatsApp(ann)} className="p-3 bg-[#25D366] text-white rounded-xl active:scale-90 hover:scale-110 transition-all shadow-md" title="Partager sur WhatsApp"><MessageCircle size={18}/></button>
+                 <button onClick={() => handleShareEmail(ann)} className="p-3 bg-gray-900 text-white rounded-xl active:scale-90 hover:scale-110 transition-all shadow-md" title="Partager par Email"><Mail size={18}/></button>
                  <button onClick={() => handleToggleFavorite(ann.id)} className={`p-3 rounded-xl border transition-all hover:scale-110 active:scale-90 shadow-sm ${favoriteIds.has(ann.id) ? 'bg-amber-50 text-amber-500 border-amber-200' : 'bg-gray-50 text-gray-400'}`}><Bookmark size={18}/></button>
                  {canEdit && <button onClick={() => handleEdit(ann)} className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white hover:scale-110 active:scale-90 transition-all shadow-sm"><Pencil size={18}/></button>}
-                 {canDelete && <button onClick={() => handleDelete(ann.id)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white hover:scale-110 active:scale-90 transition-all shadow-sm"><Trash2 size={18}/></button>}
+                 {canDelete && (
+                  <button onClick={() => handleDelete(ann.id)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white hover:scale-110 active:scale-90 transition-all shadow-sm">
+                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18}/>}
+                  </button>
+                 )}
               </div>
             </div>
           );
@@ -224,41 +251,26 @@ export default function Announcements() {
               )}
             </div>
             <textarea required value={newAnn.content} onChange={e => setNewAnn({...newAnn, content: e.target.value})} rows={6} className="w-full px-5 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl font-bold text-sm outline-none italic" placeholder="Contenu..." />
-            <button type="submit" disabled={submitting} className="w-full py-5 bg-primary-500 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
+            <button type="submit" disabled={submitting} className="w-full py-5 bg-primary-500 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all shadow-xl">
                {submitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : (editingId ? "Enregistrer" : "Publier")}
             </button>
          </form>
       </Modal>
 
-      <Modal isOpen={!!viewingAnn} onClose={() => setViewingAnn(null)} title="Détail de l'information">
+      <Modal isOpen={!!viewingAnn} onClose={() => setViewingAnn(null)} title="Détail">
         {viewingAnn && (
           <div className="space-y-8">
             <div className="space-y-2">
               <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg text-white ${viewingAnn.priority === 'urgent' ? 'bg-rose-500' : (viewingAnn.priority === 'important' ? 'bg-amber-500' : 'bg-gray-500')}`}>{viewingAnn.priority}</span>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white italic leading-tight">{viewingAnn.title}</h3>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white italic leading-tight tracking-tight">{viewingAnn.title}</h3>
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{viewingAnn.author} • {new Date(viewingAnn.date).toLocaleDateString()}</p>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-[2.5rem] border border-gray-100 shadow-inner-soft">
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-700">
               <StructuredContent content={viewingAnn.content} />
             </div>
-            {viewingAnn.links && viewingAnn.links.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Liens ressources</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {viewingAnn.links.map((link, idx) => (
-                    <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-100 rounded-2xl hover:border-primary-300 transition-all">
-                      <p className="text-xs font-black truncate">{link.label}</p>
-                      <Link2 size={16} className="text-primary-500" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
             <div className="flex gap-3">
-              <button onClick={() => handleShare(viewingAnn)} className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">Partager</button>
-              <button onClick={() => { handleToggleFavorite(viewingAnn.id); setViewingAnn(null); }} className="flex-1 py-4 border-2 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
-                {favoriteIds.has(viewingAnn.id) ? 'Retirer' : 'Ajouter Favori'}
-              </button>
+              <button onClick={() => handleShareWhatsApp(viewingAnn)} className="flex-1 py-4 bg-[#25D366] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all shadow-md">WhatsApp</button>
+              <button onClick={() => handleShareEmail(viewingAnn)} className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all shadow-md">Email</button>
             </div>
           </div>
         )}

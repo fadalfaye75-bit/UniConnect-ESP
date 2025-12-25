@@ -236,6 +236,17 @@ export default function Schedule() {
     setShowEditModal(false);
   };
 
+  const handleDeleteFile = async (id: string) => {
+    if (!window.confirm("Supprimer définitivement ce document archivé ?")) return;
+    try {
+      await API.schedules.deleteFile(id);
+      addNotification({ title: 'Archivé Retiré', message: 'Le document a été supprimé.', type: 'info' });
+      fetchAllData(true);
+    } catch (e) {
+      addNotification({ title: 'Erreur', message: 'Impossible de supprimer.', type: 'alert' });
+    }
+  };
+
   const getDurationInUnits = (start: string, end: string) => {
     const [h1, m1] = start.split(':').map(Number);
     const [h2, m2] = end.split(':').map(Number);
@@ -416,19 +427,34 @@ export default function Schedule() {
         </div>
       ) : (
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {schedules.map((sch) => (
-              <div key={sch.id} className="bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 transition-all hover:scale-[1.02] flex flex-col">
-                  <div className="flex justify-between items-start mb-8">
-                      <div className="p-5 bg-emerald-50 text-emerald-600 rounded-3xl shadow-sm"><FileText size={28} /></div>
-                  </div>
-                  <h3 className="text-2xl font-black italic text-gray-900 dark:text-white mb-2 leading-none">{sch.version}</h3>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10">{new Date(sch.uploadDate).toLocaleDateString()}</p>
-                  <div className="mt-auto grid grid-cols-2 gap-3">
-                    <a href={sch.url} target="_blank" rel="noreferrer" className="py-4 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center">Aperçu</a>
-                    <a href={sch.url} download className="py-4 bg-primary-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest text-center shadow-lg">Télécharger</a>
-                  </div>
-              </div>
-            ))}
+            {schedules.map((sch) => {
+              const isOwner = user?.id === sch.user_id;
+              const isAdmin = user?.role === UserRole.ADMIN;
+              const canDeleteFile = isAdmin || isOwner;
+
+              return (
+                <div key={sch.id} className="group bg-white dark:bg-gray-900 rounded-[3rem] p-10 shadow-soft border-2 border-transparent hover:border-gray-100 transition-all hover:scale-[1.02] flex flex-col relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-8">
+                        <div className="p-5 bg-emerald-50 text-emerald-600 rounded-3xl shadow-sm"><FileText size={28} /></div>
+                        {canDeleteFile && (
+                          <button 
+                            onClick={() => handleDeleteFile(sch.id)}
+                            className="p-3 bg-red-50 text-red-400 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                            title="Supprimer définitivement"
+                          >
+                             <Trash2 size={18}/>
+                          </button>
+                        )}
+                    </div>
+                    <h3 className="text-2xl font-black italic text-gray-900 dark:text-white mb-2 leading-none">{sch.version}</h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10">{new Date(sch.uploadDate).toLocaleDateString()}</p>
+                    <div className="mt-auto grid grid-cols-2 gap-3">
+                      <a href={sch.url} target="_blank" rel="noreferrer" className="py-4 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest text-center">Aperçu</a>
+                      <a href={sch.url} download className="py-4 bg-primary-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest text-center shadow-lg">Télécharger</a>
+                    </div>
+                </div>
+              );
+            })}
         </div>
       )}
 

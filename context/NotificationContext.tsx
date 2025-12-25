@@ -1,8 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { AppNotification, Exam } from '../types';
+import { AppNotification, Exam, UserRole } from '../types';
 import { useAuth } from './AuthContext';
 import { API } from '../services/api';
+import { supabase } from '../services/supabaseClient';
 
 interface NotificationContextType {
   notifications: AppNotification[];
@@ -20,15 +21,17 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [permission, setPermission] = useState<NotificationPermission>('default');
-  const notifiedExamsRef = useRef<Set<string>>(new Set());
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+  const notifiedItemsRef = useRef<Set<string>>(new Set());
 
   const triggerBrowserNotification = useCallback((title: string, message: string, options?: NotificationOptions) => {
-    if (Notification.permission === 'granted') {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         const n = new Notification(title, {
           body: message,
-          icon: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', // Icône générique éducation
+          icon: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
           badge: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
           ...options
         });
@@ -43,6 +46,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const allNotifs = await API.notifications.list();
+      setNotifications(allNotifs);
+    } catch (e) {
+      console.warn("Notification fetch failed");
+    }
+  }, [user]);
+
   const checkImminentExams = useCallback(async () => {
     if (!user) return;
     try {
@@ -55,80 +68,96 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         const targetClass = exam.className || 'Général';
         const isForUser = targetClass === 'Général' || targetClass === user.className;
         
-        return isForUser && examDate > now && examDate <= tomorrow && !notifiedExamsRef.current.has(exam.id);
+        return isForUser && examDate > now && examDate <= tomorrow && !notifiedItemsRef.current.has(`exam-${exam.id}`);
       });
 
       imminentExams.forEach(exam => {
         const timeStr = new Date(exam.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         triggerBrowserNotification(
           "📚 Examen Imminent !",
-          `Rappel : Ton épreuve de ${exam.subject} commence demain à ${timeStr} en salle ${exam.room}.`,
+          `Rappel : Ton épreuve de ${exam.subject} commence demain à ${timeStr}.`,
           { tag: `exam-${exam.id}` }
         );
-        notifiedExamsRef.current.add(exam.id);
+        notifiedItemsRef.current.add(`exam-${exam.id}`);
       });
     } catch (e) {
-      console.warn("Failed to check imminent exams");
+      console.warn("Imminent exams check failed");
     }
   }, [user, triggerBrowserNotification]);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const allNotifs = await API.notifications.list();
-      setNotifications(allNotifs);
-    } catch (e) {
-      console.warn("Notification fetch failed");
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if ("Notification" in window) {
-      setPermission(Notification.permission);
-    }
-  }, []);
 
   useEffect(() => {
     if (!user) {
       setNotifications([]);
-      notifiedExamsRef.current = new Set();
+      notifiedItemsRef.current = new Set();
       return;
     }
 
     fetchNotifications();
     checkImminentExams();
 
-    // Vérification périodique des examens imminents (toutes les heures)
-    const examCheckInterval = setInterval(checkImminentExams, 3600000);
-
-    // Souscription temps réel pour les nouvelles annonces/votes/etc
-    const subscription = API.notifications.subscribe(user.id, (payload: any) => {
-      const newNotif = payload.new;
-      
-      const isTargeted = 
-        !newNotif.target_user_id || newNotif.target_user_id === user.id ||
-        newNotif.target_role === user.role ||
-        newNotif.target_class === user.className ||
-        newNotif.target_class === 'Général';
-
-      if (isTargeted) {
+    // 1. Écouteur pour les alertes personnelles
+    const personalSub = supabase
+      .channel(`personal-notifs-${user.id}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `target_user_id=eq.${user.id}`
+      }, (payload) => {
         fetchNotifications();
-        triggerBrowserNotification(newNotif.title, newNotif.message);
-      }
-    });
+        triggerBrowserNotification(payload.new.title, payload.new.message);
+      })
+      .subscribe();
+
+    // 2. Écouteur global pour les nouvelles annonces
+    const announcementsSub = supabase
+      .channel('global-announcements')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'announcements' 
+      }, (payload) => {
+        const ann = payload.new;
+        const targetClass = ann.classname || 'Général';
+        if (targetClass === 'Général' || targetClass === user.className) {
+          triggerBrowserNotification(`📢 Nouvelle Annonce : ${ann.title}`, ann.content.substring(0, 100) + "...");
+          fetchNotifications(); // Refresh list
+        }
+      })
+      .subscribe();
+
+    // 3. Écouteur global pour les nouveaux sondages
+    const pollsSub = supabase
+      .channel('global-polls')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'polls' 
+      }, (payload) => {
+        const poll = payload.new;
+        const targetClass = poll.classname || 'Général';
+        if (targetClass === 'Général' || targetClass === user.className) {
+          triggerBrowserNotification(`🗳️ Nouveau Sondage : ${poll.question}`, "Votre avis compte ! Participez à la consultation.");
+        }
+      })
+      .subscribe();
+
+    const examInterval = setInterval(checkImminentExams, 3600000); // Check hourly
 
     return () => {
-      subscription.unsubscribe();
-      clearInterval(examCheckInterval);
+      personalSub.unsubscribe();
+      announcementsSub.unsubscribe();
+      pollsSub.unsubscribe();
+      clearInterval(examInterval);
     };
   }, [user, fetchNotifications, triggerBrowserNotification, checkImminentExams]);
 
   const requestPermission = async () => {
-    if (!("Notification" in window)) return;
+    if (typeof Notification === 'undefined') return;
     const result = await Notification.requestPermission();
     setPermission(result);
     if (result === 'granted') {
-      triggerBrowserNotification("UniConnect ESP", "Les notifications push sont maintenant activées !");
+      triggerBrowserNotification("UniConnect ESP", "Génial ! Vous recevrez désormais les alertes en temps réel.");
     }
   };
 

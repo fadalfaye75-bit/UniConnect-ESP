@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Video, ExternalLink, Plus, Trash2, Calendar, Copy, Loader2, Link as LinkIcon, Share2, Pencil, Search, Filter, Radio, Sparkles, Clock, ArrowRight, VideoOff, CheckCircle2, Save } from 'lucide-react';
+import { Video, ExternalLink, Plus, Trash2, Calendar, Copy, Loader2, Link as LinkIcon, Share2, Pencil, Search, Filter, Radio, Sparkles, Clock, ArrowRight, VideoOff, CheckCircle2, Save, MessageCircle, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { UserRole, MeetLink } from '../types';
+import { UserRole, MeetLink, ClassGroup } from '../types';
 import Modal from '../components/Modal';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
@@ -20,13 +20,13 @@ export default function Meet() {
   const themeColor = user?.themeColor || '#0ea5e9';
   
   const [meetings, setMeetings] = useState<MeetLink[]>([]);
-  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
+  const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [dayFilter, setDayFilter] = useState('all');
+  const [dayFilter, setSetDayFilter] = useState('all');
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ title: '', platform: 'Google Meet', url: '', day: '', time: '', className: '' });
@@ -67,6 +67,31 @@ export default function Meet() {
     navigator.clipboard.writeText(link.url).then(() => {
       addNotification({ title: 'Lien copié', message: 'Vous pouvez maintenant le partager.', type: 'success' });
     });
+  };
+
+  const handleShareWhatsApp = (link: MeetLink) => {
+    try {
+      const text = `🎥 *UniConnect ESP - Direct*\n\nModule: *${link.title}*\nPlateforme: ${link.platform}\nHoraire: ${link.time}\n\nLien: ${link.url}\n\n#UniConnect #ESP`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      API.interactions.incrementShare('meet_links', link.id).catch(() => {});
+    } catch (e) {
+      console.error("WhatsApp share failed", e);
+    }
+  };
+
+  const handleShareEmail = (link: MeetLink) => {
+    try {
+      const targetClass = classes.find(c => c.name === link.className);
+      const recipient = targetClass?.email || '';
+
+      const subject = `[UniConnect ESP] Session Direct: ${link.title}`;
+      const body = `Bonjour,\n\nUne session de cours en direct est programmée :\n\nModule: ${link.title}\nPlateforme: ${link.platform}\nHoraire: ${link.time}\n\nLien de connexion: ${link.url}\n\nÀ bientôt sur UniConnect !`;
+      
+      window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      API.interactions.incrementShare('meet_links', link.id).catch(() => {});
+    } catch (e) {
+      console.error("Email share failed", e);
+    }
   };
 
   const openNewModal = () => {
@@ -161,7 +186,7 @@ export default function Meet() {
           />
         </div>
         <div className="flex gap-2">
-          <select value={dayFilter} onChange={e => setDayFilter(e.target.value)} className="px-6 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black uppercase outline-none border-none cursor-pointer">
+          <select value={dayFilter} onChange={e => setSetDayFilter(e.target.value)} className="px-6 py-4 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black uppercase outline-none border-none cursor-pointer">
              <option value="all">Tous les jours</option>
              {['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'].map(d => <option key={d} value={d}>{d}</option>)}
           </select>
@@ -184,6 +209,8 @@ export default function Meet() {
                     {link.platform}
                   </span>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                      <button onClick={() => handleShareWhatsApp(link)} className="p-3 text-gray-400 hover:text-emerald-500 bg-gray-50 dark:bg-gray-800 rounded-xl" title="WhatsApp"><MessageCircle size={16}/></button>
+                      <button onClick={() => handleShareEmail(link)} className="p-3 text-gray-400 hover:text-gray-900 bg-gray-50 dark:bg-gray-800 rounded-xl" title="Email"><Mail size={16}/></button>
                       <button onClick={() => handleCopy(link)} className="p-3 text-gray-400 hover:text-emerald-500 bg-gray-50 dark:bg-gray-800 rounded-xl" title="Copier le lien"><Copy size={16}/></button>
                       {canModify && (
                           <>
@@ -210,7 +237,6 @@ export default function Meet() {
                   <a href={link.url} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-3 bg-emerald-500 text-white py-5 rounded-[2rem] font-black shadow-xl uppercase italic text-[10px] tracking-widest hover:bg-emerald-600 transition-all active:scale-95">
                     Accéder au direct <ExternalLink size={18} />
                   </a>
-                  <button onClick={() => { if(navigator.share) navigator.share({title: link.title, url: link.url}); }} className="p-5 bg-gray-900 text-white rounded-[2rem] shadow-xl hover:scale-105 transition-all"><Share2 size={20} /></button>
                </div>
             </div>
           );

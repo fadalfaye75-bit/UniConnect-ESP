@@ -1,90 +1,85 @@
 
-# UniConnect ESP - Configuration SQL
+# UniConnect ESP - Configuration SQL Complète
 
-Ce script doit être exécuté dans le **SQL Editor** de votre tableau de bord Supabase pour garantir que toutes les fonctionnalités (Thèmes, Planning, Mots de passe) sont opérationnelles.
+Exécutez ce script dans l'éditeur SQL de votre interface Supabase pour activer toutes les fonctionnalités et corriger les bugs de vote/déconnexion.
 
-## 🚀 Script de Réparation Rapide (Correctif Theme & Profil)
-
-Exécutez ce bloc si vous avez des erreurs lors de la mise à jour du profil :
+## 🗳️ 1. Correction du Système de Vote (Bouton "Bloqué à 0%")
 
 ```sql
--- 1. Ajout des colonnes de personnalisation manquantes
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme_color text DEFAULT '#0ea5e9';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS classname text DEFAULT 'Général';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS school_name text DEFAULT 'ESP Dakar';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
+-- A. S'assurer que les compteurs ne sont jamais NULL
+UPDATE public.poll_options SET votes = 0 WHERE votes IS NULL;
+ALTER TABLE public.poll_options ALTER COLUMN votes SET DEFAULT 0;
 
--- 2. Nettoyage et Réinitialisation des Politiques RLS (Sécurité)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+-- B. Fonction de vote robuste (SECURITY DEFINER pour bypasser RLS lors de l'écriture)
+CREATE OR REPLACE FUNCTION cast_poll_vote(p_poll_id uuid, p_option_id uuid)
+RETURNS void AS $$
+BEGIN
+  -- 1. Supprimer le vote précédent de l'utilisateur pour ce sondage précis
+  DELETE FROM public.poll_votes 
+  WHERE poll_id = p_poll_id 
+  AND user_id = auth.uid();
 
--- Autoriser la lecture publique des profils (nécessaire pour afficher les auteurs des messages)
-DROP POLICY IF EXISTS "Lecture publique des profils" ON public.profiles;
-CREATE POLICY "Lecture publique des profils" 
-ON public.profiles FOR SELECT 
+  -- 2. Insérer le nouveau vote
+  INSERT INTO public.poll_votes (poll_id, option_id, user_id)
+  VALUES (p_poll_id, p_option_id, auth.uid());
+
+  -- 3. Mettre à jour les compteurs de TOUTES les options de ce sondage pour une cohérence totale
+  UPDATE public.poll_options 
+  SET votes = (
+    SELECT count(*) 
+    FROM public.poll_votes 
+    WHERE public.poll_votes.option_id = public.poll_options.id
+  )
+  WHERE public.poll_options.poll_id = p_poll_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- C. Activer la lecture des résultats (Indispensable pour l'affichage des %)
+-- Sans ces lignes, le frontend ne peut pas lire le nombre de votes des options (donc 0%)
+ALTER TABLE public.poll_options ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Lecture des options" ON public.poll_options;
+CREATE POLICY "Lecture des options" ON public.poll_options FOR SELECT TO authenticated USING (true);
+
+ALTER TABLE public.poll_votes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Lecture des votes" ON public.poll_votes;
+CREATE POLICY "Lecture des votes" ON public.poll_votes FOR SELECT TO authenticated USING (true);
+```
+
+## 🏢 2. Configuration des Classes (Emails de partage)
+
+```sql
+-- 1. S'assurer que la table classes possède la colonne email
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS email text;
+
+-- 2. Activer RLS sur la table classes
+ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
+
+-- 3. Politique : Tout utilisateur authentifié peut lire les classes
+DROP POLICY IF EXISTS "Lecture publique des classes" ON public.classes;
+CREATE POLICY "Lecture publique des classes" 
+ON public.classes FOR SELECT 
+TO authenticated 
 USING (true);
 
--- Autoriser l'utilisateur à modifier SON PROPRE profil (Nom, Thème, Classe)
-DROP POLICY IF EXISTS "Utilisateurs modifient leur propre profil" ON public.profiles;
-CREATE POLICY "Utilisateurs modifient leur propre profil" 
-ON public.profiles FOR UPDATE 
-USING (auth.uid() = id)
-WITH CHECK (auth.uid() = id);
-
--- Autoriser les Admins à tout gérer
-DROP POLICY IF EXISTS "Admins modifient tout" ON public.profiles;
-CREATE POLICY "Admins modifient tout" 
-ON public.profiles FOR ALL 
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND role = 'ADMIN'
-  )
-);
+-- 4. Exemple de mise à jour des emails de filières
+UPDATE public.classes SET email = 'delegue.dsti@esp.sn' WHERE name ILIKE '%DSTI%';
 ```
 
-## 📅 Configuration des Plannings (Visibilité Étudiante)
-
-Exécutez ceci pour que les étudiants puissent voir les emplois du temps créés :
+## 🛠️ 3. Structure des Partages
 
 ```sql
--- Activer la sécurité sur les tables de planning
-ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.schedule_slots ENABLE ROW LEVEL SECURITY;
+-- S'assurer que les colonnes de partage existent
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS share_count int4 DEFAULT 0;
+ALTER TABLE public.exams ADD COLUMN IF NOT EXISTS share_count int4 DEFAULT 0;
+ALTER TABLE public.polls ADD COLUMN IF NOT EXISTS share_count int4 DEFAULT 0;
 
--- Tout le monde peut LIRE le planning
-DROP POLICY IF EXISTS "Lecture publique des plannings" ON public.schedules;
-CREATE POLICY "Lecture publique des plannings" ON public.schedules FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS "Lecture publique des slots" ON public.schedule_slots;
-CREATE POLICY "Lecture publique des slots" ON public.schedule_slots FOR SELECT USING (true);
-
--- Seuls les Admins/Délégués peuvent MODIFIER le planning
-DROP POLICY IF EXISTS "Gestion planning délégués/admins" ON public.schedule_slots;
-CREATE POLICY "Gestion planning délégués/admins" ON public.schedule_slots FOR ALL 
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() AND (role = 'ADMIN' OR role = 'DELEGATE')
-  )
-);
+-- Fonction d'incrémentation universelle
+CREATE OR REPLACE FUNCTION increment_share_count(target_table text, target_id uuid)
+RETURNS void AS $$
+BEGIN
+  EXECUTE format('UPDATE public.%I SET share_count = COALESCE(share_count, 0) + 1 WHERE id = %L', target_table, target_id);
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
-
-## 📝 Structure Complète de la Table Profiles
-
-```sql
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    name text NOT NULL,
-    email text UNIQUE NOT NULL,
-    role text DEFAULT 'STUDENT', -- 'STUDENT', 'DELEGATE', 'ADMIN'
-    classname text DEFAULT 'Général',
-    school_name text DEFAULT 'ESP Dakar',
-    avatar text,
-    theme_color text DEFAULT '#0ea5e9',
-    is_active boolean DEFAULT true,
-    created_at timestamptz DEFAULT now()
-);
-```
-
-### Note sur les mots de passe
-La modification des mots de passe par l'utilisateur (via son profil) s'effectue directement par l'appel `supabase.auth.updateUser({ password: '...' })`. Ce processus est géré par la couche **GoTrue** de Supabase et ne nécessite aucune politique SQL particulière dans le schéma `public`. L'utilisateur authentifié a nativement le droit de modifier ses propres informations d'accès tant que sa session est active.

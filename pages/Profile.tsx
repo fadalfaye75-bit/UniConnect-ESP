@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { API } from '../services/api';
 import { UserAvatar } from '../components/Layout';
-import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin, School, Eye, EyeOff, Copy, ClipboardCheck } from 'lucide-react';
+import { Lock, Save, Loader2, Shield, Mail, Briefcase, GraduationCap, User as UserIcon, Palette, Check, Bookmark, Megaphone, FileText, ChevronRight, ExternalLink, Trash2, StarOff, Archive, CheckCircle2, MapPin, School, Eye, EyeOff, Copy, ClipboardCheck, LogOut } from 'lucide-react';
 import { Announcement, ScheduleFile, ClassGroup } from '../types';
 
 const THEME_COLORS = [
@@ -19,11 +19,11 @@ const THEME_COLORS = [
 ];
 
 export default function Profile() {
-  const { user, updateCurrentUser } = useAuth();
+  const { user, updateCurrentUser, logout } = useAuth();
   const { addNotification } = useNotification();
   
   const [activeTab, setActiveTab] = useState<'info' | 'favorites'>('info');
-  const [loadingPass, setLoadingPass] = useState(false); // État dédié au mot de passe
+  const [loadingPass, setLoadingPass] = useState(false);
   const [infoLoading, setInfoLoading] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   
@@ -96,6 +96,12 @@ export default function Profile() {
       addNotification({ title: 'Erreur', message: 'Action impossible.', type: 'alert' });
     } finally {
       setInfoLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm("Voulez-vous vraiment quitter le portail ?")) {
+      await logout();
     }
   };
 
@@ -201,6 +207,16 @@ export default function Profile() {
                     <p className="font-bold italic text-sm truncate">{user?.className}</p>
                   </div>
               </div>
+            </div>
+
+            <div className="bg-red-50 dark:bg-red-900/10 rounded-[3rem] p-8 border border-red-100 dark:border-red-900/30 text-center">
+               <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-4">Fin de session</h4>
+               <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white dark:bg-gray-800 text-red-600 font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-sm hover:bg-red-600 hover:text-white transition-all active:scale-95 italic"
+               >
+                  <LogOut size={16} /> Quitter UniConnect
+               </button>
             </div>
           </div>
 

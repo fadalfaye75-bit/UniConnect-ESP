@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Megaphone, Calendar, GraduationCap, Video, 
   BarChart2, Search, LogOut, Menu, Moon, Sun, 
   ShieldCheck, UserCircle, Bell, Check, School, 
-  CheckCheck, Clock
+  CheckCheck, Clock, BellRing, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -34,7 +34,7 @@ export const UserAvatar = React.memo(({ name, color, className = "w-10 h-10", te
 
 export default function Layout() {
   const { user, logout, toggleTheme, isDarkMode } = useAuth();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotification();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, permission, requestPermission } = useNotification();
   
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isNotifOpen, setNotifOpen] = useState(false);
@@ -110,11 +110,10 @@ export default function Layout() {
   }, [user?.role]);
 
   const handleLogout = useCallback(async () => {
-    if (window.confirm("Se déconnecter de UniConnect ?")) {
+    if (window.confirm("Voulez-vous vraiment quitter le portail UniConnect ESP ?")) {
       await logout();
-      navigate('/login');
     }
-  }, [logout, navigate]);
+  }, [logout]);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 font-sans overflow-hidden">
@@ -160,8 +159,11 @@ export default function Layout() {
         </div>
 
         <div className="p-6">
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all italic active:scale-95">
-            <LogOut size={18} /> Quitter le portail
+          <button 
+            onClick={handleLogout} 
+            className="flex items-center gap-3 w-full px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-red-400 hover:text-white hover:bg-red-500 dark:hover:bg-red-900 rounded-2xl transition-all italic active:scale-95 border border-red-50 dark:border-red-900/30"
+          >
+            <LogOut size={18} /> Déconnexion
           </button>
         </div>
       </aside>
@@ -210,7 +212,7 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4" ref={notifRef}>
+          <div className="flex items-center gap-2 sm:gap-4" ref={notifRef}>
              <div className="relative">
                <button onClick={() => setNotifOpen(!isNotifOpen)} className={`p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90 ${isNotifOpen ? 'bg-gray-50 dark:bg-gray-800 shadow-inner' : ''}`}>
                  <Bell size={24} style={isNotifOpen ? { color: themeColor } : {}} />
@@ -232,6 +234,20 @@ export default function Layout() {
                         </button>
                       )}
                     </div>
+                    
+                    {/* Invitation aux notifications Push */}
+                    {permission !== 'granted' && (
+                      <div className="mx-4 mt-4 p-5 bg-primary-50/50 dark:bg-primary-900/10 border border-primary-100/50 rounded-2xl flex items-center gap-4 group animate-pulse-subtle">
+                         <div className="p-2.5 bg-white dark:bg-gray-800 rounded-xl shadow-sm text-primary-500">
+                           <BellRing size={18} />
+                         </div>
+                         <div className="flex-1 min-w-0">
+                           <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">Alertes Bureau</p>
+                           <button onClick={requestPermission} className="text-[9px] font-bold text-primary-600 uppercase mt-0.5 hover:underline">Activer maintenant</button>
+                         </div>
+                      </div>
+                    )}
+
                     <div className="max-h-[50vh] overflow-y-auto custom-scrollbar p-3 space-y-2">
                       {notifications.length > 0 ? notifications.map(notif => (
                         <div key={notif.id} className={`p-5 rounded-[2rem] flex gap-4 transition-all relative group ${notif.isRead ? 'opacity-50 grayscale' : 'bg-primary-50/30 dark:bg-primary-900/10'}`}>
@@ -264,6 +280,14 @@ export default function Layout() {
 
              <button onClick={toggleTheme} className="p-3 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-2xl transition-all active:scale-90">
                {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
+             </button>
+
+             <button 
+                onClick={handleLogout} 
+                className="p-3 text-red-400 hover:text-white hover:bg-red-500 dark:hover:bg-red-900 rounded-2xl transition-all active:scale-90 border border-transparent hover:border-red-200 dark:hover:border-red-800"
+                title="Déconnexion sécurisée"
+              >
+               <LogOut size={24} />
              </button>
           </div>
         </header>
