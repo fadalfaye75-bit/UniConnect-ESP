@@ -122,7 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return (
           <div id="app-loader">
               <div className="spinner"></div>
-              <p className="mt-4 text-sm font-black text-gray-500 uppercase tracking-widest italic animate-pulse">Synchronisation UniConnect...</p>
+              <p className="mt-4 text-sm font-black text-gray-500 uppercase tracking-widest italic animate-pulse">Synchronisation JangHup...</p>
           </div>
       );
   }

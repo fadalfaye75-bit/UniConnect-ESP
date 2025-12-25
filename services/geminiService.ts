@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { API } from "./api";
 
@@ -32,6 +33,7 @@ export async function* generateAIResponseStream(prompt: string, context: string)
       Ton ton : ${toneInstruction}
       Niveau de détail : ${verbosityInstruction}
       Réponds toujours en français.
+      Tu es l'assistant officiel de la plateforme JangHup pour l'ESP Dakar.
     `;
 
     const responseStream = await ai.models.generateContentStream({

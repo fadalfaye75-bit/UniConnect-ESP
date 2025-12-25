@@ -1,5 +1,5 @@
 {
-  "name": "UniConnect ESP",
-  "description": "Plateforme de gestion pour l'École Supérieure Polytechnique de Dakar, connectant administration, délégués et étudiants.",
+  "name": "JangHup",
+  "description": "Plateforme de gestion universitaire centralisée, connectant l'administration, les délégués et les étudiants de l'ESP Dakar.",
   "requestFramePermissions": []
 }

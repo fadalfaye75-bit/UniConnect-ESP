@@ -13,7 +13,7 @@ interface Message {
 export default function GeminiChat() {
   const { user } = useAuth();
   const { isOpen, openChat, closeChat } = useChat();
-  const initialGreeting = `Bonjour ${user?.name.split(' ')[0]} ! Je suis ton assistant UniConnect. Une question sur tes cours ou ton planning ?`;
+  const initialGreeting = `Bonjour ${user?.name.split(' ')[0]} ! Je suis ton assistant JangHup. Une question sur tes cours ou ton planning ?`;
   
   const [messages, setMessages] = useState<Message[]>([
     { role: 'model', text: initialGreeting }
@@ -101,7 +101,7 @@ export default function GeminiChat() {
             <Bot size={20} />
           </div>
           <div>
-            <h3 className="font-black text-sm uppercase tracking-widest italic leading-none">UniConnect AI</h3>
+            <h3 className="font-black text-sm uppercase tracking-widest italic leading-none">JangHup AI</h3>
             <p className="text-[9px] opacity-70 mt-1 uppercase font-bold tracking-tighter">Assistant Virtuel ESP</p>
           </div>
         </div>

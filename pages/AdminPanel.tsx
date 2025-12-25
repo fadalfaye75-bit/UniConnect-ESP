@@ -96,18 +96,35 @@ export default function AdminPanel() {
       let dataToExport: any[] = [];
       let filename = "";
       if (type === 'users') {
-        dataToExport = users.map(u => ({ Nom: u.name, Email: u.email, Role: u.role, Classe: u.className }));
-        filename = "utilisateurs";
+        dataToExport = users.map(u => ({ Nom: u.name, Email: u.email, Role: u.role, Filière: u.className }));
+        filename = "utilisateurs_complets";
       } else if (type === 'classes') {
         dataToExport = classesList.map(c => ({ Nom: c.name, Email: c.email, Effectif: c.studentCount }));
-        filename = "classes";
+        filename = "liste_filieres";
       } else {
         dataToExport = logs.map(l => ({ Date: l.timestamp, Acteur: l.actor, Action: l.action }));
-        filename = "audit";
+        filename = "audit_securite";
       }
       downloadCSV(dataToExport, filename);
       addNotification({ title: 'Export réussi', message: 'Fichier généré.', type: 'success' });
     } catch (e) { addNotification({ title: 'Erreur Export', message: 'Échec génération.', type: 'alert' }); } finally { setExporting(null); }
+  };
+
+  const handleExportClassUsers = (className: string) => {
+    const classUsers = users.filter(u => u.className === className);
+    if (classUsers.length === 0) {
+      addNotification({ title: 'Export impossible', message: 'Aucun inscrit dans cette filière.', type: 'warning' });
+      return;
+    }
+    const dataToExport = classUsers.map(u => ({ 
+      Nom: u.name, 
+      Email: u.email, 
+      Role: u.role, 
+      Filière: u.className 
+    }));
+    const sanitizedName = className.toLowerCase().replace(/\s+/g, '_');
+    downloadCSV(dataToExport, `liste_etudiants_${sanitizedName}`);
+    addNotification({ title: 'Export réussi', message: `Liste ${className} générée.`, type: 'success' });
   };
 
   const dashboardStats = useMemo(() => {
@@ -141,7 +158,6 @@ export default function AdminPanel() {
     } finally { setSubmitting(false); }
   };
 
-  // FIX: Added missing function to handle opening user edit modal
   const handleOpenEditUser = (u: User) => {
     setEditingUser(u);
     setIsEditModalOpen(true);
@@ -168,7 +184,6 @@ export default function AdminPanel() {
       } catch(e: any) { addNotification({ title: 'Erreur', message: e?.message, type: 'alert' }); }
   };
 
-  // FIX: Added missing function to handle opening class modal for create/edit
   const openClassModal = (cls?: ClassGroup) => {
     if (cls) {
       setClassFormData({ id: cls.id, name: cls.name, email: cls.email || '', color: cls.color || '#0ea5e9' });
@@ -220,7 +235,7 @@ export default function AdminPanel() {
                 </div>
                 <div>
                     <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider italic">Administration</h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Contrôle UniConnect</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Contrôle JangHup</p>
                 </div>
              </div>
              <nav className="space-y-1">
@@ -228,7 +243,7 @@ export default function AdminPanel() {
                    { id: 'dashboard', icon: LayoutDashboard, label: 'Tableau de Bord' },
                    { id: 'classes', icon: BookOpen, label: 'Classes & Filières' },
                    { id: 'users', icon: Users, label: 'Utilisateurs' },
-                   { id: 'logs', icon: Activity, label: 'Journal d\'audit' }
+                   { id: 'logs', icon: Activity, label: 'Audit Sécurité' }
                  ].map((tab) => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)} className={`w-full flex items-center gap-4 px-5 py-4 text-xs font-black rounded-2xl transition-all uppercase tracking-widest italic ${activeTab === tab.id ? 'bg-primary-500 text-white shadow-xl' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                         <tab.icon size={18} /> {tab.label}
@@ -237,7 +252,7 @@ export default function AdminPanel() {
              </nav>
          </div>
          <div className="bg-gradient-to-br from-gray-900 to-primary-900 rounded-[2.5rem] p-6 text-white shadow-xl relative overflow-hidden">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-70">Extraction</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-70">Extraction Globale</p>
             <button onClick={() => handleExportData('users')} className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 mb-2">
                 <FileDown size={14} /> CSV Utilisateurs
             </button>
@@ -249,16 +264,16 @@ export default function AdminPanel() {
             <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-800">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Inscrits</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Inscrits</p>
                         <h3 className="text-5xl font-black text-gray-900 dark:text-white mt-4 italic tracking-tighter">{dashboardStats.usersCount}</h3>
                     </div>
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] shadow-soft border border-gray-100 dark:border-gray-800">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filières</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filières Actives</p>
                         <h3 className="text-5xl font-black text-gray-900 dark:text-white mt-4 italic tracking-tighter">{dashboardStats.classesCount}</h3>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-gray-900 p-10 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800">
-                    <h3 className="text-sm font-black text-gray-800 dark:text-white mb-8 uppercase tracking-widest italic">Répartition</h3>
+                    <h3 className="text-sm font-black text-gray-800 dark:text-white mb-8 uppercase tracking-widest italic">Répartition des comptes</h3>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart><Pie data={dashboardStats.rolesData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"><Cell fill="#3B82F6" /><Cell fill="#10B981" /><Cell fill="#8B5CF6" /></Pie><RechartsTooltip /><Legend /></PieChart>
@@ -271,18 +286,33 @@ export default function AdminPanel() {
          {activeTab === 'users' && (
             <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
                 <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex flex-col lg:flex-row justify-between gap-4">
-                    <input type="text" placeholder="Rechercher..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="px-5 py-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-bold outline-none" />
-                    <button onClick={() => setIsUserModalOpen(true)} className="bg-primary-500 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-primary-500/20 active:scale-95 transition-all">Nouveau Compte</button>
+                    <div className="flex-1 max-w-md relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input type="text" placeholder="Rechercher un utilisateur..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-3 bg-gray-50 dark:bg-gray-800 rounded-2xl text-sm font-bold outline-none" />
+                    </div>
+                    <button onClick={() => setIsUserModalOpen(true)} className="bg-primary-500 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-primary-500/20 active:scale-95 transition-all">Créer un profil</button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800/50"><tr><th className="px-8 py-4">Nom</th><th className="px-8 py-4">Email</th><th className="px-8 py-4">Action</th></tr></thead>
+                        <thead className="bg-gray-50 dark:bg-gray-800/50 text-[10px] uppercase tracking-widest text-gray-400 font-black">
+                            <tr><th className="px-8 py-6">Utilisateur</th><th className="px-8 py-6">Email / Contact</th><th className="px-8 py-6">Actions</th></tr>
+                        </thead>
                         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                             {filteredUsers.map(u => (
-                                <tr key={u.id} className="hover:bg-gray-50/20">
-                                    <td className="px-8 py-4 font-black italic">{u.name} <span className="text-[8px] bg-gray-100 px-2 py-0.5 rounded ml-2">{u.role}</span></td>
-                                    <td className="px-8 py-4 text-xs text-gray-400">{u.email}</td>
-                                    <td className="px-8 py-4 flex gap-2"><button onClick={() => handleOpenEditUser(u)} className="p-2 text-primary-500"><PenSquare size={16}/></button><button onClick={() => handleDeleteUser(u.id)} className="p-2 text-red-500"><Trash2 size={16}/></button></td>
+                                <tr key={u.id} className="hover:bg-gray-50/20 transition-colors">
+                                    <td className="px-8 py-5">
+                                        <div className="flex flex-col">
+                                            <span className="font-black italic text-gray-900 dark:text-white">{u.name}</span>
+                                            <span className="text-[8px] uppercase font-bold text-primary-500">{u.role} • {u.className}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-xs text-gray-400 font-medium">{u.email}</td>
+                                    <td className="px-8 py-5">
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleOpenEditUser(u)} className="p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-primary-500 rounded-xl transition-all"><PenSquare size={16}/></button>
+                                            <button onClick={() => handleDeleteUser(u.id)} className="p-2.5 bg-red-50 dark:bg-red-900/10 text-red-400 hover:text-red-500 rounded-xl transition-all"><Trash2 size={16}/></button>
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -292,24 +322,33 @@ export default function AdminPanel() {
          )}
 
          {activeTab === 'classes' && (
-            <div className="space-y-6">
+            <div className="space-y-10">
                 <div className="flex justify-between items-center px-4">
-                    <h3 className="text-xl font-black italic">Gestion des Filières</h3>
-                    <button onClick={() => openClassModal()} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase">Ajouter</button>
+                    <div>
+                        <h3 className="text-2xl font-black italic text-gray-900 dark:text-white uppercase tracking-tighter">Classes & Filières</h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Exportation des listes d'inscrits par section</p>
+                    </div>
+                    <button onClick={() => openClassModal()} className="bg-gray-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+                        <Plus size={18} className="inline mr-2"/> Ajouter
+                    </button>
                 </div>
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
                     {classesList.map(cls => (
-                        <div key={cls.id} className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] border-2 shadow-soft flex flex-col" style={{ borderColor: cls.color }}>
-                            <h4 className="text-xl font-black italic mb-2">{cls.name}</h4>
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-6 uppercase">
-                                <Users size={12}/> {cls.studentCount || 0} inscrits
+                        <div key={cls.id} className="bg-white dark:bg-gray-900 p-10 rounded-[3.5rem] border-2 shadow-soft flex flex-col group relative overflow-hidden transition-all hover:-translate-y-1" style={{ borderColor: cls.color }}>
+                            <div className="absolute top-0 right-0 w-32 h-32 opacity-5 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-transform duration-700" style={{ backgroundColor: cls.color }} />
+                            
+                            <h4 className="text-2xl font-black italic mb-2 text-gray-900 dark:text-white">{cls.name}</h4>
+                            <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 mb-10 uppercase tracking-widest">
+                                <Users size={12} className="text-primary-500"/> {cls.studentCount || 0} Inscrits
                             </div>
-                            <div className="mt-auto flex gap-2">
-                                {cls.email && (
-                                  <a href={`mailto:${cls.email}`} className="flex-1 p-3 bg-primary-50 text-primary-600 rounded-xl text-center flex items-center justify-center" title="Contacter la classe"><Mail size={16}/></a>
-                                )}
-                                <button onClick={() => openClassModal(cls)} className="p-3 bg-gray-50 text-gray-400 rounded-xl"><PenSquare size={16}/></button>
-                                <button onClick={() => handleDeleteClass(cls.id, cls.name)} className="p-3 bg-red-50 text-red-400 rounded-xl"><Trash2 size={16}/></button>
+                            
+                            <div className="mt-auto flex flex-wrap gap-2">
+                                <button onClick={() => handleExportClassUsers(cls.name)} className="flex-1 p-4 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center gap-2 hover:bg-emerald-600 hover:text-white transition-all shadow-sm group/btn" title="Exporter la liste des inscrits (CSV)">
+                                    <Download size={18} className="group-hover/btn:translate-y-0.5 transition-transform" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">CSV</span>
+                                </button>
+                                <button onClick={() => openClassModal(cls)} className="p-4 bg-gray-50 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-2xl transition-all shadow-sm"><PenSquare size={18}/></button>
+                                <button onClick={() => handleDeleteClass(cls.id, cls.name)} className="p-4 bg-red-50 dark:bg-red-900/10 text-red-400 hover:text-red-500 rounded-2xl transition-all shadow-sm"><Trash2 size={18}/></button>
                             </div>
                         </div>
                     ))}
@@ -318,34 +357,86 @@ export default function AdminPanel() {
          )}
 
          {activeTab === 'logs' && (
-            <div className="bg-white dark:bg-gray-900 rounded-[3rem] p-4 space-y-2 border">
-                {logs.map(log => (
-                    <div key={log.id} className="flex items-center gap-4 p-4 border-b last:border-0"><div className="p-2 bg-blue-50 text-blue-500 rounded-xl"><Shield size={14}/></div><div className="flex-1"><p className="text-xs font-bold">{log.actor} <span className="text-gray-400">{log.action}</span> {log.target}</p><p className="text-[9px] text-gray-400 font-black uppercase mt-1">{new Date(log.timestamp).toLocaleString()}</p></div></div>
-                ))}
+            <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div className="p-8 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 italic">Journal des activités</h4>
+                    <button onClick={() => handleExportData('logs')} className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <FileDown size={14}/> Audit complet
+                    </button>
+                </div>
+                <div className="p-6 space-y-2">
+                    {logs.map(log => (
+                        <div key={log.id} className="flex items-center gap-6 p-5 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 rounded-[1.8rem] transition-all border-b border-gray-50 dark:border-gray-800 last:border-0">
+                            <div className="p-3 bg-gray-100 dark:bg-gray-800 text-primary-500 rounded-xl shadow-inner shrink-0">
+                                <Shield size={16}/>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-900 dark:text-white italic">
+                                    {log.actor} <span className="text-gray-400 font-medium lowercase italic mx-1">{log.action}</span> {log.target}
+                                </p>
+                                <p className="text-[9px] text-gray-400 font-black uppercase mt-1 tracking-widest">{new Date(log.timestamp).toLocaleString()}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
          )}
       </div>
 
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Nouveau compte">
-          <form onSubmit={handleCreateUser} className="space-y-4">
-              <input required className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm" placeholder="Nom" value={newUser.fullName} onChange={e => setNewUser({...newUser, fullName: e.target.value})} />
-              <input required type="email" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm" placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-              <div className="grid grid-cols-2 gap-4">
-                  <select className="p-4 rounded-2xl bg-gray-50 border-none font-black text-[10px] uppercase" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}><option value={UserRole.STUDENT}>Étudiant</option><option value={UserRole.DELEGATE}>Délégué</option><option value={UserRole.ADMIN}>Admin</option></select>
-                  <select className="p-4 rounded-2xl bg-gray-50 border-none font-black text-[10px] uppercase" value={newUser.className} onChange={e => setNewUser({...newUser, className: e.target.value})}><option value="">Classe...</option>{classesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Nouveau compte JangHup">
+          <form onSubmit={handleCreateUser} className="space-y-6">
+              <div className="space-y-4">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identité Complète</label>
+                  <input required className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-bold text-sm outline-none focus:ring-4 focus:ring-primary-50" placeholder="Prénom et Nom" value={newUser.fullName} onChange={e => setNewUser({...newUser, fullName: e.target.value})} />
               </div>
-              <button disabled={submitting} type="submit" className="w-full bg-primary-500 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[11px] shadow-lg shadow-primary-500/20">Créer</button>
+              <div className="space-y-4">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Académique</label>
+                  <input required type="email" className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-bold text-sm outline-none focus:ring-4 focus:ring-primary-50" placeholder="etudiant@esp.sn" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Niveau d'accès</label>
+                    <select className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-black text-[10px] uppercase outline-none cursor-pointer" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
+                        <option value={UserRole.STUDENT}>Étudiant</option>
+                        <option value={UserRole.DELEGATE}>Délégué</option>
+                        <option value={UserRole.ADMIN}>Admin</option>
+                    </select>
+                  </div>
+                  <div className="space-y-4">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Filière</label>
+                    <select className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-black text-[10px] uppercase outline-none cursor-pointer" value={newUser.className} onChange={e => setNewUser({...newUser, className: e.target.value})}>
+                        <option value="">Sélectionner...</option>
+                        {classesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+              </div>
+              <button disabled={submitting} type="submit" className="w-full bg-primary-500 text-white font-black py-5 rounded-[2rem] uppercase tracking-[0.2em] italic text-xs shadow-xl active:scale-95 transition-all">
+                {submitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : "Valider l'inscription"}
+              </button>
           </form>
       </Modal>
 
-      <Modal isOpen={isClassModalOpen} onClose={() => setIsClassModalOpen(false)} title="Filière">
-         <form onSubmit={handleClassSubmit} className="space-y-4">
-            <input required className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm" placeholder="Nom" value={classFormData.name} onChange={e => setClassFormData({...classFormData, name: e.target.value})} />
-            <input type="email" className="w-full p-4 rounded-2xl bg-gray-50 border-none font-bold text-sm" placeholder="Email Contact" value={classFormData.email} onChange={e => setClassFormData({...classFormData, email: e.target.value})} />
-            <div className="grid grid-cols-4 gap-2">
-                {THEME_COLORS.map(c => <button key={c.color} type="button" onClick={() => setClassFormData({...classFormData, color: c.color})} className={`h-10 rounded-xl ${classFormData.color === c.color ? 'ring-2 ring-black scale-110' : ''}`} style={{ backgroundColor: c.color }} />)}
+      <Modal isOpen={isClassModalOpen} onClose={() => setIsClassModalOpen(false)} title="Gestion de la Filière">
+         <form onSubmit={handleClassSubmit} className="space-y-6">
+            <div className="space-y-4">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nom du département / Classe</label>
+                <input required className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-bold text-sm outline-none" placeholder="ex: L2 Informatique" value={classFormData.name} onChange={e => setClassFormData({...classFormData, name: e.target.value})} />
             </div>
-            <button disabled={submitting} type="submit" className="w-full bg-primary-500 text-white font-black py-4 rounded-2xl uppercase tracking-widest">Valider</button>
+            <div className="space-y-4">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email de diffusion (Optionnel)</label>
+                <input type="email" className="w-full p-5 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none font-bold text-sm outline-none" placeholder="liste.classe@esp.sn" value={classFormData.email} onChange={e => setClassFormData({...classFormData, email: e.target.value})} />
+            </div>
+            <div className="space-y-4">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identité chromatique</label>
+                <div className="grid grid-cols-4 gap-3">
+                    {THEME_COLORS.map(c => (
+                        <button key={c.color} type="button" onClick={() => setClassFormData({...classFormData, color: c.color})} className={`h-12 rounded-xl transition-all ${classFormData.color === c.color ? 'ring-4 ring-offset-2 ring-gray-200 dark:ring-gray-700 scale-110 shadow-lg' : 'hover:scale-105'}`} style={{ backgroundColor: c.color }} />
+                    ))}
+                </div>
+            </div>
+            <button disabled={submitting} type="submit" className="w-full bg-gray-900 text-white font-black py-5 rounded-[2rem] uppercase tracking-widest text-[10px] italic shadow-2xl active:scale-95 transition-all">
+                {submitting ? <Loader2 className="animate-spin mx-auto" size={20}/> : "Enregistrer les modifications"}
+            </button>
          </form>
       </Modal>
     </div>
