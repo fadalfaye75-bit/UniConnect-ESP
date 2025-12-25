@@ -254,6 +254,18 @@ export default function AdminPanel() {
       finally { setSubmitting(false); }
   };
 
+  // Corrected: Added the missing handleDeleteClass function
+  const handleDeleteClass = async (id: string, name: string) => {
+    if(!window.confirm(`Supprimer définitivement la filière "${name}" ? Cela peut affecter l'accès des étudiants.`)) return;
+    try {
+        await API.classes.delete(id);
+        await fetchGlobalData();
+        addNotification({ title: 'Filière supprimée', message: 'La section a été retirée avec succès.', type: 'info' });
+    } catch (e: any) {
+        addNotification({ title: 'Erreur', message: e?.message || "Impossible de supprimer la classe.", type: 'alert' });
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
       const matchesSearch = (u.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
