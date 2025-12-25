@@ -76,8 +76,8 @@ export default function Dashboard() {
   ], [data, themeColor]);
 
   if (loading) return (
-    <div className="max-w-7xl mx-auto space-y-12 animate-pulse">
-      <div className="h-40 w-full skeleton rounded-[4rem]" />
+    <div className="max-w-7xl mx-auto space-y-12 pb-20">
+      <div className="h-56 w-full skeleton rounded-[4rem]" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
         <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
       </div>
@@ -99,7 +99,7 @@ export default function Dashboard() {
                Bienvenue, <br /><span style={{ color: themeColor }}>{user?.name.split(' ')[0]}</span>
              </h1>
              <p className="text-gray-500 dark:text-gray-400 text-lg font-medium italic max-w-2xl leading-relaxed flex items-center gap-3">
-               Tableau de bord officiel <ArrowRight size={18} className="text-gray-300" /> <span className="font-black text-gray-900 dark:text-white underline decoration-4 underline-offset-8 transition-all hover:decoration-primary-500" style={{ textDecorationColor: themeColor }}>{user?.className}</span>
+               Portail officiel de gestion <ArrowRight size={18} className="text-gray-300" /> <span className="font-black text-gray-900 dark:text-white underline decoration-4 underline-offset-8 transition-all hover:decoration-primary-500" style={{ textDecorationColor: themeColor }}>{user?.className}</span>
              </p>
           </div>
           
@@ -145,13 +145,12 @@ export default function Dashboard() {
 
       {/* Main Content Layout Optimized */}
       <div className="grid lg:grid-cols-5 gap-16">
-        {/* News Feed with Hover Effects */}
         <div className="lg:col-span-3 space-y-10">
           <div className="flex items-center justify-between px-6">
              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.4em] flex items-center gap-4 italic">
-                <Megaphone size={22} style={{ color: themeColor }} /> Actualités récentes
+                <Megaphone size={22} style={{ color: themeColor }} /> Flux d'actualité
              </h3>
-             <Link to="/announcements" className="text-[10px] font-black uppercase text-primary-500 tracking-widest hover:underline underline-offset-4 transition-all">Consulter les archives</Link>
+             <Link to="/announcements" className="text-[10px] font-black uppercase text-primary-500 tracking-widest hover:underline underline-offset-4 transition-all">Archives complètes</Link>
           </div>
           
           <div className="space-y-8">
@@ -175,17 +174,16 @@ export default function Dashboard() {
               )) : (
                 <div className="py-24 text-center bg-white dark:bg-gray-900 rounded-[4rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                   <Inbox className="mx-auto text-gray-200 mb-6" size={48} />
-                  <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic opacity-50">Aucun flux disponible pour {user?.className}</p>
+                  <p className="text-sm font-black text-gray-400 uppercase tracking-widest italic opacity-50">Aucune annonce pour la classe {user?.className}</p>
                 </div>
               )}
           </div>
         </div>
 
-        {/* Action Sidebar Refined */}
         <div className="lg:col-span-2 space-y-12">
           <section className="space-y-8">
              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.4em] px-6 italic flex items-center gap-4">
-                <GraduationCap size={22} className="text-amber-500" /> Épreuves à venir
+                <GraduationCap size={22} className="text-amber-500" /> Agenda Examens
              </h3>
              <div className="bg-white dark:bg-gray-900 p-10 rounded-[3.5rem] shadow-soft border border-gray-50 dark:border-gray-800 space-y-8">
                 {data.exams.length > 0 ? data.exams.map(exam => (
@@ -202,14 +200,14 @@ export default function Dashboard() {
                       </div>
                    </div>
                 )) : (
-                   <p className="text-center py-10 text-[10px] font-black text-gray-300 uppercase italic tracking-widest">Calendrier des examens vide</p>
+                   <p className="text-center py-10 text-[10px] font-black text-gray-300 uppercase italic tracking-widest">Aucun examen programmé</p>
                 )}
              </div>
           </section>
 
           <section className="space-y-8">
              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-[0.4em] px-6 italic flex items-center gap-4">
-                <Radio size={22} className="text-emerald-500 animate-pulse" /> Live Sessions
+                <Radio size={22} className="text-emerald-500 animate-pulse" /> Live Now
              </h3>
              <div className="bg-gradient-to-br from-emerald-600 to-teal-800 p-10 rounded-[3.5rem] text-white shadow-premium relative overflow-hidden group">
                 <Video className="absolute -bottom-10 -right-10 w-48 h-48 opacity-10 group-hover:scale-125 transition-transform duration-1000" />
@@ -221,11 +219,11 @@ export default function Dashboard() {
                             <span className="text-[10px] font-black uppercase tracking-[0.3em]">{meet.time}</span>
                          </div>
                          <h4 className="text-2xl font-black italic tracking-tighter leading-tight">{meet.title}</h4>
-                         <a href={meet.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 px-8 py-4 bg-white text-emerald-700 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all hover:bg-emerald-50">Rejoindre le salon <ArrowRight size={16}/></a>
+                         <a href={meet.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 px-8 py-4 bg-white text-emerald-700 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all hover:bg-emerald-50">Accéder au cours <ArrowRight size={16}/></a>
                       </div>
                    )) : (
                       <div className="text-center py-6 italic opacity-80">
-                         <p className="text-[10px] font-black uppercase tracking-widest">Aucune session en direct</p>
+                         <p className="text-[10px] font-black uppercase tracking-widest">Aucune session live active</p>
                       </div>
                    )}
                 </div>
